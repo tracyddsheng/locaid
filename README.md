@@ -1,3 +1,0 @@
-# LocAid
-logo
-description... lol
