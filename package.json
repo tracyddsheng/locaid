@@ -1,0 +1,22 @@
+{
+  "name": "locaid",
+  "version": "0.0.0",
+  "workspaces": [
+    "packages/*"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tracyddsheng/locaid.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/tracyddsheng/locaid/issues"
+  },
+  "homepage": "https://github.com/tracyddsheng/locaid#readme",
+  "description": "",
+  "dependencies": {
+    "dayjs": "^1.11.13"
+  }
+}
