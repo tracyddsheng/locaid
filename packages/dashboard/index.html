@@ -51,6 +51,10 @@
             <p>This page listens for those WebSocket messages and draws a temporary graphic on the map for each unique device. <strong>Note: These points are not saved and will disappear on refresh.</strong></p>
             <h2>Connection Status</h2>
             <div id="connection-status">Connecting to relay server...</div>
+            <h2>Layers</h2>
+            <div id="layerlist-container"></div>
+            <h2>Actions</h2>
+            <button id="notifyBtn" style="width: 100%; padding: 10px; font-size: 1em;">Notify Vulnerable Addresses</button>
         </div>
         <div id="viewDiv"></div>
     </div>
@@ -69,32 +73,60 @@
         const connectionStatusDiv = document.getElementById('connection-status');
 
         require([
-            "esri/Map",
+            "esri/WebMap",
             "esri/views/MapView",
             "esri/layers/GraphicsLayer",
             "esri/Graphic",
             "esri/geometry/Point", // <-- Import the Point class
-            "esri/geometry/geometryEngine"
-        ], function(Map, MapView, GraphicsLayer, Graphic, Point, geometryEngine) {
+            "esri/geometry/geometryEngine",
+            "esri/widgets/LayerList"
+        ], function(WebMap, MapView, GraphicsLayer, Graphic, Point, geometryEngine, LayerList) {
 
             // Use a plain JavaScript Object as a dictionary to track graphics by deviceId.
             // Each entry will now hold both the point and the accuracy circle.
             const liveGraphics = {};
+            const addressGraphics = {};
+            let fireHazardLayer = null;
 
-            const map = new Map({
-                basemap: "arcgis-topographic"
+            const map = new WebMap({
+                portalItem: {
+                    id: "0d8708f95c71433daa14f4ad6965ff2d"
+                }
             });
 
             const view = new MapView({
                 container: "viewDiv",
                 map: map,
-                center: [-98.5795, 39.8283],
-                zoom: 4
+                center: [-118.2437, 34.0522], // Los Angeles
+                zoom: 10
             });
 
             // Create a graphics layer to hold the live points
             const graphicsLayer = new GraphicsLayer();
+            graphicsLayer.listMode = "hide"; // Don't show in layer list
             map.add(graphicsLayer);
+
+            const layerList = new LayerList({
+                view: view,
+                container: "layerlist-container"
+            });
+
+            // Wait for the map and its layers to finish loading
+            map.when(() => {
+                fireHazardLayer = map.allLayers.find(layer => {
+                    return layer.title === "High Fire Hazard Severity Zones";
+                });
+
+                if (fireHazardLayer) {
+                    console.log("Successfully found the High Fire Hazard Severity Zones layer.");
+                    // Ensure the layer is visible by default for the query to work reliably
+                    fireHazardLayer.visible = true;
+                } else {
+                    console.error("Could not find the 'High Fire Hazard Severity Zones' layer. Please check the WebMap configuration.");
+                    updateStatus("Fire Hazard Layer not found!", true);
+                }
+            });
+
 
             // --- WEBSOCKET CONNECTION ---
             setupWebSocket();
@@ -105,11 +137,16 @@
                 socket.onopen = () => updateStatus('Connected to relay server.', false, true);
 
                 socket.onmessage = (event) => {
-                    console.log('--- Desktop client received message ---');
-                    console.log('Raw data:', event.data);
-                    const locationData = JSON.parse(event.data);
-                    updateStatus(`Received location from ${locationData.deviceId}`, false);
-                    updateMapGraphic(locationData);
+                    const data = JSON.parse(event.data);
+
+                    // Check if it's an array (initial address load) or single object (live update)
+                    if (Array.isArray(data)) {
+                        console.log(`Received initial batch of ${data.length} static addresses.`);
+                        data.forEach(address => updateMapGraphic(address));
+                    } else {
+                        updateStatus(`Received location from ${data.deviceId}`, false);
+                        updateMapGraphic(data);
+                    }
                 };
 
                 socket.onclose = () => {
@@ -128,6 +165,33 @@
             function updateMapGraphic(locationData) {
                 const { latitude, longitude, deviceId, accuracy, type = 'user' } = locationData;
                 
+                if (type === 'address') {
+                    // This is where you would load a FeatureLayer in a real app.
+                    // For now, we create graphics from the simulated data.
+                    if (!addressGraphics[deviceId]) {
+                         const point = new Point({ longitude, latitude });
+                         const addressSymbol = {
+                            type: "simple-marker",
+                            style: "diamond",
+                            size: 10,
+                            color: [0, 0, 139], // Dark Blue
+                            outline: { width: 1, color: "white" }
+                         };
+                         const addressGraphic = new Graphic({
+                             geometry: point,
+                             symbol: addressSymbol,
+                             attributes: locationData,
+                             popupTemplate: {
+                                 title: "Vulnerable Address",
+                                 content: "Device ID: {deviceId}"
+                             }
+                         });
+                         graphicsLayer.add(addressGraphic);
+                         addressGraphics[deviceId] = addressGraphic;
+                    }
+                    return; // End processing for static addresses
+                }
+
                 const point = new Point({
                     longitude: longitude,
                     latitude: latitude
@@ -208,6 +272,55 @@
                     setTimeout(() => { statusDiv.style.display = 'none'; }, 4000);
                 }
             }
+
+            document.getElementById('notifyBtn').addEventListener('click', () => {
+                if (!fireHazardLayer) {
+                    updateStatus("Fire Hazard Layer not ready. Cannot perform notification.", true);
+                    return;
+                }
+
+                // Create a query object from the fire hazard layer
+                const query = fireHazardLayer.createQuery();
+                query.geometry = {
+                    type: "multipoint",
+                    points: Object.values(addressGraphics).map(graphic => [graphic.geometry.longitude, graphic.geometry.latitude])
+                };
+                query.spatialRelationship = "intersects"; // Find polygons that contain our points
+
+                fireHazardLayer.queryObjectIds(query).then(objectIds => {
+                    if (!objectIds || objectIds.length === 0) {
+                        updateStatus("No addresses are within high fire hazard zones.", false);
+                        return;
+                    }
+
+                    console.log(`Found ${objectIds.length} addresses in fire zones.`);
+                    const notifiedSymbol = {
+                        type: "simple-marker",
+                        style: "diamond",
+                        size: 12,
+                        color: [255, 0, 0], // Red
+                        outline: { width: 2, color: "yellow" }
+                    };
+                    
+                    // A bit of a trick: we can't directly get back which point belongs to which polygon hit.
+                    // So we query the layer for the geometries of the polygons that were hit.
+                    fireHazardLayer.queryFeatures({ objectIds, returnGeometry: true }).then(featureSet => {
+                         const fireZoneGeometries = featureSet.features.map(f => f.geometry);
+                         // Now check each of our address graphics to see if it's inside any of these hot zones.
+                         for (const deviceId in addressGraphics) {
+                             const addressGraphic = addressGraphics[deviceId];
+                             const isVulnerable = geometryEngine.intersects(fireZoneGeometries, addressGraphic.geometry);
+                             if (isVulnerable) {
+                                 addressGraphic.symbol = notifiedSymbol;
+                             }
+                         }
+                         updateStatus(`${objectIds.length} vulnerable addresses notified!`, false);
+                    });
+                }).catch(err => {
+                    console.error("Error querying fire hazard layer:", err);
+                    updateStatus("Error during notification.", true);
+                });
+            });
         });
     </script>
 </body>
