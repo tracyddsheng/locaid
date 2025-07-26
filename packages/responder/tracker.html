@@ -147,6 +147,20 @@
         #filter-layers-btn {
             background-color: #42454A;
         }
+
+        #route-to-button {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: white;
+            border: solid 1px black;
+
+            border-radius: 5px;
+
+            padding: 10px;
+        }
     </style>
 </head>
 
@@ -164,13 +178,15 @@
 
             <div id="viewDiv"></div>
 
-            <div class="search-bar">
+            <!-- <div class="search-bar">
                 <div class="search-bar-inner">
                     <input type="search" class="search-input" placeholder="Search location..." />
                     <img class="search-icon" src="src/assets/search.png"></img>
                 </div>
-            </div>
+            </div> -->
         </div>
+
+        <div id="route-to-button">Route to</div>
 
         <div class="button-group">
             <!-- <div id="status">Status: Idle</div> -->
@@ -500,6 +516,8 @@
         isLayerListVisible = !isLayerListVisible
     })
 
+    let currentLocation;
+
     if ("geolocation" in navigator) {
         navigator.geolocation.getCurrentPosition(
             function (position) {
@@ -507,7 +525,7 @@
                 const longitude = position.coords.longitude;
 
                 console.log(latitude, longitude)
-                drawRoute({ x: longitude, y: latitude, name: "My Location" }, { x: -117.89101260860105, y: 34.14678578730155, name: "Los Angeles County Fire Dept. Station 97" })
+                currentLocation = { x: longitude, y: latitude }
             }
         )
     }
@@ -532,6 +550,29 @@
         const results = await routeLayer.solve({ apiKey: "AAPTxy8BH1VEsoebNVZXo8HurJNkc1laRp1vAwT3-tXnuF3x-hGfL7b7jMe3CM0GiMyuTTg-lrFRdjvrAWsq9NCjJTcBWf_1bK0AoEE-eukjSiR7_41IaU8ZbnZytMHzhJvd87ZnvexVuj65yOBoclKr2N3ciauOPysAhdUze5Xm2KImfnxpA2Tnh9ANk5OTLlVMowDfQQ6RT5TIcg7um6QJUQi8VHORtLw0-sg5yUsCrVb1Hnp4zkT4zV-ZxpYG0_HAAT1_teoS1mtm" });
         routeLayer.update(results);
     }
+
+    const goToButton = document.getElementById("route-to-button")
+
+    view.on("click", function (event) {
+        view.hitTest(event).then(function (response) {
+            const fireStaions = response.results.filter(r => r.graphic.layer && r.graphic.layer.title === "Fire Stations")
+            console.log(fireStaions)
+
+            if (fireStaions.length > 0) {
+                goToButton.style.display = "block"
+            } else {
+                goToButton.style.display = "none"
+            }
+
+            // fireStaions.mapPoint.latitude
+
+            goToButton.addEventListener("click", () => {
+                drawRoute({ x: currentLocation.x, y: currentLocation.y, name: "My Location" }, { x: fireStaions[0].mapPoint.longitude, y: fireStaions[0].mapPoint.latitude, name: "Los Angeles County Fire Dept. Station 97" })
+
+                goToButton.style.display = "none"
+            })
+        })
+    })
 </script>
 
 </html>
