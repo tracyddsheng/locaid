@@ -40,3 +40,20 @@
     background-color: #798491;
     border-radius: 999px;
 }
+
+.button-filter {
+    background-color: #181818d3;
+    top: 1rem;
+    left: 1rem;
+    position: absolute;
+    padding: 0.75rem 1rem;
+    z-index: 10;
+}
+
+.button-track {
+    position: absolute;
+    padding: 0.75rem 1rem;
+    z-index: 10;
+    top: 1rem;
+    right: 1rem;
+}
