@@ -93,7 +93,7 @@ server.listen(PORT, () => {
   console.log(`Mobile client URL: https://localhost:${PORT}/packages/responder/index.html`);
   console.log(`Dashboard client URL: https://localhost:${PORT}/packages/dashboard/login.html`);
 
-  initializeTestData();
-  // Start the simulation loop
-  setInterval(simulateLiveMovement, 2000);
+  // initializeTestData();
+  // // Start the simulation loop
+  // setInterval(simulateLiveMovement, 2000);
 });

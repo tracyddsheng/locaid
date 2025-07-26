@@ -37,6 +37,57 @@
             display: none;
             z-index: 2;
         }
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            display: none; /* Hidden by default */
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+        }
+        .modal-content {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            width: 400px;
+            max-width: 90%;
+            max-height: 80%;
+            display: flex;
+            flex-direction: column;
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+            margin-bottom: 10px;
+        }
+        .modal-header h2 {
+            margin: 0;
+            font-size: 1.2em;
+        }
+        .close-button {
+            font-size: 24px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .modal-body {
+            overflow-y: auto;
+        }
+        .modal-body ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .modal-body li {
+            padding: 8px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
     </style>
     <script src="https://js.arcgis.com/4.29/"></script>
 </head>
@@ -61,6 +112,18 @@
         <div id="viewDiv"></div>
     </div>
     <div id="status"></div>
+
+    <div id="notification-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Notified Users</h2>
+                <span class="close-button">&times;</span>
+            </div>
+            <div id="notified-users-list" class="modal-body">
+                <!-- List will be populated here -->
+            </div>
+        </div>
+    </div>
 
     <script>
         // --- CONFIGURATION ---
@@ -96,6 +159,12 @@
                 });
             });
 
+            // Add a specific rule for the LA County GIS server
+            esriConfig.request.proxyRules.push({
+                urlPrefix: "https://public.gis.lacounty.gov",
+                proxyUrl: "https://www.arcgis.com/sharing/proxy"
+            });
+
 
             // Use a plain JavaScript Object as a dictionary to track graphics by deviceId.
             // Each entry will now hold both the point and the accuracy circle.
@@ -103,6 +172,7 @@
             const addressGraphics = {};
             let fireHazardLayer = null;
             const STALE_DATA_TIMEOUT = 30000; // 30 seconds
+            let signUpData = []; // To store the results from the user layer
 
             const map = new WebMap({
                 portalItem: {
@@ -147,16 +217,41 @@
             // Wait for the map and its layers to finish loading
             map.when(() => {
                 fireHazardLayer = map.allLayers.find(layer => {
-                    return layer.title === "High Fire Hazard Severity Zones";
+                    return layer.title === "Fire Hazard Severity Zones";
                 });
 
                 if (fireHazardLayer) {
-                    console.log("Successfully found the High Fire Hazard Severity Zones layer.");
+                    console.log("Successfully found the Fire Hazard Severity Zones layer.");
                     // Ensure the layer is visible by default for the query to work reliably
                     fireHazardLayer.visible = true;
                 } else {
-                    console.error("Could not find the 'High Fire Hazard Severity Zones' layer. Please check the WebMap configuration.");
+                    console.error("Could not find the 'Fire Hazard Severity Zones' layer. Please check the WebMap configuration.");
                     updateStatus("Fire Hazard Layer not found!", true);
+                }
+
+                // --- Find and log the LocAid User Sign Up layer ---
+                const userSignUpLayer = map.allLayers.find(layer => {
+                    return layer.title === "LocAid Users";
+                });
+
+                if (userSignUpLayer) {
+                    console.log("Found 'LocAid Users' layer. Querying features...");
+                    userSignUpLayer.when(() => {
+                        // --- LOG 1: Log the layer's fields to verify names ---
+                        console.log("Verifying 'LocAid Users' fields:", userSignUpLayer.fields.map(f => f.name));
+                        return userSignUpLayer.queryFeatures();
+                    })
+                    .then(results => {
+                        console.log(`Successfully queried ${results.features.length} features from the sign-up layer.`);
+                        signUpData = results.features; // Store the features
+                        const userAttributes = signUpData.map(feature => feature.attributes);
+                        console.log("LocAid User Sign Up Data:", userAttributes);
+                    })
+                    .catch(err => {
+                        console.error("Error querying the LocAid Users layer:", err);
+                    });
+                } else {
+                    console.warn("Could not find the 'LocAid Users' layer in the WebMap.");
                 }
             });
 
@@ -342,75 +437,82 @@
                 }
             }
 
+            function showNotificationModal(users) {
+                const list = document.getElementById('notified-users-list');
+                list.innerHTML = '<ul>' + users.map(user => {
+                    const name = `${user.attributes.first_name || ''} ${user.attributes.last_name || ''}`.trim() || 'N/A';
+                    const phone = user.attributes.phone_number || 'N/A';
+                    return `<li><strong>${name}</strong> - ${phone}</li>`;
+                }).join('') + '</ul>';
+
+                document.getElementById('notification-modal').style.display = 'flex';
+            }
+
+            function hideNotificationModal() {
+                document.getElementById('notification-modal').style.display = 'none';
+            }
+
+            // Add event listener for the modal close button
+            document.querySelector('.close-button').addEventListener('click', hideNotificationModal);
+            // Also close when clicking the overlay
+            document.getElementById('notification-modal').addEventListener('click', (event) => {
+                if (event.target.id === 'notification-modal') {
+                    hideNotificationModal();
+                }
+            });
+
+
             document.getElementById('notifyBtn').addEventListener('click', () => {
                 if (!fireHazardLayer) {
                     updateStatus("Fire Hazard Layer not ready. Cannot perform notification.", true);
                     return;
                 }
-                console.log("Starting notification process...");
+                if (signUpData.length === 0) {
+                    updateStatus("User sign-up data not loaded yet.", true);
+                    return;
+                }
+                console.log("Starting notification process for signed-up users...");
 
-                const allAddressPoints = Object.values(addressGraphics).map(graphic => graphic.geometry);
-                if (allAddressPoints.length === 0) {
-                    updateStatus("No addresses loaded yet.", false);
+                const userGeometries = signUpData.map(f => f.geometry).filter(g => g != null);
+                if (userGeometries.length === 0) {
+                    updateStatus("No users with valid locations found.", false);
                     return;
                 }
 
                 const query = fireHazardLayer.createQuery();
-                query.geometry = {
-                    type: "multipoint",
-                    points: allAddressPoints.map(p => [p.longitude, p.latitude])
-                };
+                query.geometry = { type: "multipoint", points: userGeometries.map(g => [g.longitude, g.latitude]) };
                 query.spatialRelationship = "intersects";
-                query.returnGeometry = true; // We need the geometries of the fire zones
+                // We don't need any fields back from the fire layer, just its geometry.
+                // query.outFields = ["first_name", "last_name", "phone_number", "objectid"]; 
+                query.returnGeometry = true; 
 
-                console.log(`Querying fire hazard layer with ${allAddressPoints.length} address points.`);
+                // --- LOG 2: Log the exact query object being sent ---
+                console.log("Executing spatial query with parameters:", JSON.stringify(query.toJSON(), null, 2));
 
                 fireHazardLayer.queryFeatures(query).then(featureSet => {
-                    // Filter out any features that might have come back with null geometry
-                    const fireZoneGeometries = featureSet.features
-                        .map(f => f.geometry)
-                        .filter(geom => geom != null);
-
-                    if (fireZoneGeometries.length === 0) {
-                        updateStatus("No addresses are within high fire hazard zones.", false);
-                        console.log("Query returned 0 intersecting fire hazard zones or zones had null geometry.");
+                    const vulnerableUsers = featureSet.features;
+                    if (!vulnerableUsers || vulnerableUsers.length === 0) {
+                        updateStatus("No signed-up users are within high fire hazard zones.", false);
                         return;
                     }
 
-                    console.log(`Found ${fireZoneGeometries.length} valid fire zones that contain addresses. Now checking which addresses are vulnerable.`);
+                    const notifiedUsers = signUpData.filter(userFeature => {
+                        const userGeom = userFeature.geometry;
+                        if (!userGeom) return false;
+                        // Check if the user's location intersects with any of the returned fire zones
+                        return vulnerableUsers.some(fireFeature => geometryEngine.intersects(fireFeature.geometry, userGeom));
+                    });
                     
-                    const notifiedSymbol = {
-                        type: "simple-marker", style: "diamond", size: 12,
-                        color: [255, 0, 0], // Red
-                        outline: { width: 2, color: "yellow" }
-                    };
-                    
-                    let notifiedCount = 0;
-                    for (const deviceId in addressGraphics) {
-                         const addressGraphic = addressGraphics[deviceId];
-                         if (addressGraphic && addressGraphic.geometry) {
-                             // Loop through each fire zone to check for intersection individually
-                             for (const zone of fireZoneGeometries) {
-                                if (geometryEngine.intersects(zone, addressGraphic.geometry)) {
-                                    addressGraphic.symbol = notifiedSymbol;
-                                    notifiedCount++;
-                                    break; // Move to the next address once found in any zone
-                                }
-                             }
-                         }
-                    }
-
-                    if (notifiedCount > 0) {
-                        updateStatus(`${notifiedCount} vulnerable addresses notified!`, false);
-                        console.log(`Highlighted ${notifiedCount} addresses.`);
+                    if (notifiedUsers.length > 0) {
+                        showNotificationModal(notifiedUsers);
+                        updateStatus(`${notifiedUsers.length} vulnerable users notified!`, false);
                     } else {
-                        updateStatus("Found fire zones, but could not match to specific addresses.", true);
-                        console.warn("Intersection logic did not find matches after an initial hit. This might indicate a data projection or precision issue.");
+                        updateStatus("No signed-up users are within high fire hazard zones.", false);
                     }
-
+                
                 }).catch(err => {
-                    console.error("Error querying fire hazard layer:", err);
-                    updateStatus("Error during notification query.", true);
+                    console.error("Error querying fire hazard layer for users:", err);
+                    updateStatus("Error during user notification.", true);
                 });
             });
         });
