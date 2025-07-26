@@ -1,3 +1,10 @@
+.env files:
+packages/server/.env
+contains 
+EMAIL_USER=__________
+EMAIL_PASS=__________
+Get email_pass from https://myaccount.google.com/apppasswords 
+
 # Real-Time Location Tracking and Visualization Dashboard
 
 This project is a complete, end-to-end web application that allows a mobile device to broadcast its real-time GPS location to a central server, which then relays that location to a desktop web browser where the location is visualized live on an interactive map.

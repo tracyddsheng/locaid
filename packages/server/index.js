@@ -136,7 +136,7 @@ app.post('/send-notification', async (req, res) => {
         <p>Hello ${name},</p>
         <p>This is an urgent request from the emergency response team. Due to a developing situation in your area, we are asking you to share your live location so we can provide assistance if needed.</p>
         <p>Please click the link below on your mobile device to begin sharing your location:</p>
-        <p><a href="https://10.150.92.15/packages/responder/index.html" style="font-size: 16px; padding: 12px 20px; background-color: #a43a3a; color: white; text-decoration: none; border-radius: 5px;">Share Location</a></p>
+        <p><a href="https://10.150.92.15:3000/packages/responder/index.html" style="font-size: 16px; padding: 12px 20px; background-color: #a43a3a; color: white; text-decoration: none; border-radius: 5px;">Share Location</a></p>
         <p>Your safety is our top priority. Thank you for your cooperation.</p>
         <hr>
         <p><em>This is an automated message from the LocAid Emergency Response System.</em></p>
