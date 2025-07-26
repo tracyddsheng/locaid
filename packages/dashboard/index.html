@@ -94,20 +94,20 @@
 <body>
     <div id="container">
         <div id="sidebar">
-            <h1>Live Dashboard</h1>
-            <h2>How it Works</h2>
-            <p>This dashboard connects to a relay server to show real-time location data sent from a mobile web client.</p>
-            <p>The mobile client uses the browser's Geolocation API to get its coordinates and sends them via an HTTP POST request to a Node.js server.</p>
-            <p>The Node.js server immediately relays that location data to this page using a WebSocket connection.</p>
-            <p>This page listens for those WebSocket messages and draws a temporary graphic on the map for each unique device. <strong>Note: These points are not saved and will disappear on refresh.</strong></p>
+            <h1>LocAid Dashboard</h1>
             <h2>Connection Status</h2>
             <div id="connection-status">Connecting to relay server...</div>
             <h2>Layers</h2>
             <div id="layerlist-container"></div>
             <h2>Actions</h2>
-            <button id="notifyBtn" style="width: 100%; padding: 10px; font-size: 1em;">Notify Vulnerable Addresses</button>
+            <button id="notifyBtn" style="width: 100%; padding: 10px; font-size: 1em;" disabled>Notify Vulnerable Addresses</button>
             <h2>Live Units</h2>
             <div id="live-units-list" style="max-height: 200px; overflow-y: auto;"></div>
+            <div id="selected-user-panel" style="display: none; margin-top: 15px;">
+                <h2>Selected User</h2>
+                <div id="selected-user-info"></div>
+                <button id="get-directions-btn" style="width: 100%; padding: 10px; font-size: 1em; margin-top: 10px;">Get Directions</button>
+            </div>
         </div>
         <div id="viewDiv"></div>
     </div>
@@ -145,8 +145,14 @@
             "esri/Graphic",
             "esri/geometry/Point", // <-- Import the Point class
             "esri/geometry/geometryEngine",
-            "esri/widgets/LayerList"
-        ], function(esriConfig, WebMap, MapView, GraphicsLayer, Graphic, Point, geometryEngine, LayerList) {
+            "esri/widgets/LayerList",
+            "esri/widgets/Directions",
+            "esri/layers/FeatureLayer",
+            "esri/layers/RouteLayer"
+        ], function(esriConfig, WebMap, MapView, GraphicsLayer, Graphic, Point, geometryEngine, LayerList, Directions, FeatureLayer, RouteLayer) {
+
+            // --- API KEY CONFIGURATION ---
+            esriConfig.apiKey = "AAPTxy8BH1VEsoebNVZXo8HurOqdg02N3NcBHh5U_6TjOfCWbm0rO5jbMMbYBQsZrkiB8FuqCe6kmM5LsDMntpSdYkBowD-oSzqCKLux7qavHaZqkENGNdkVR-kg-fvY2SIxyOGNCylAcPkGGX1niZ5GqKYHuGsHBduSP2BF7Tb0zxnWvmyvy4QnHqRYo88EENoSQ54WZpq-oIDrgrtQNd3pDfce00SpGWekoxhQ9-aSC56_KtXf0XbQDmFEMAbwPKh1AT1_tBDR4aZB"; 
 
             // --- PROXY CONFIGURATION ---
             // This is a standard solution for CORS issues where a browser on one domain (localhost)
@@ -171,8 +177,26 @@
             const liveGraphics = {};
             const addressGraphics = {};
             let fireHazardLayer = null;
+            let userSignUpLayer = null;
             const STALE_DATA_TIMEOUT = 30000; // 30 seconds
             let signUpData = []; // To store the results from the user layer
+
+            // Application state tracking to ensure all data is loaded before enabling features
+            let appState = {
+                mapLoaded: false,
+                fireHazardLayerReady: false,
+                userDataLoaded: false
+            };
+
+            function checkIfAllDataReady() {
+                if (appState.mapLoaded && appState.fireHazardLayerReady && appState.userDataLoaded) {
+                    console.log("✅ All data is ready! Enabling notifications.");
+                    document.getElementById('notifyBtn').disabled = false;
+                    updateStatus("All systems ready. Notifications enabled.", false);
+                } else {
+                    console.log("⏳ Waiting for data:", appState);
+                }
+            }
 
             const map = new WebMap({
                 portalItem: {
@@ -209,49 +233,181 @@
 
             map.add(graphicsLayer);
 
+            // --- Directions Widget Setup ---
+            const routeLayer = new RouteLayer();
+            map.add(routeLayer);
+
+            const directionsWidget = new Directions({
+                view: view,
+                layer: routeLayer,
+                routeServiceUrl: "https://route-api.arcgis.com/arcgis/rest/services/World/Route/NAServer/Route_World"
+            });
+            view.ui.add(directionsWidget, "top-right");
+
             const layerList = new LayerList({
                 view: view,
                 container: "layerlist-container"
             });
 
             // Wait for the map and its layers to finish loading
-            map.when(() => {
-                fireHazardLayer = map.allLayers.find(layer => {
-                    return layer.title === "Fire Hazard Severity Zones";
+            Promise.all([map.loadAll(), view.when()]).then(() => {
+                console.log("🗺️ WebMap loaded. Available layers:", map.allLayers.map(l => l.title).toArray());
+                appState.mapLoaded = true;
+                
+                let selectedFeature = null;
+
+                // --- Set up a click listener on the view ---
+                view.on("click", (event) => {
+                    view.hitTest(event).then((response) => {
+                        const results = response.results.filter(r => r.graphic.layer && r.graphic.layer.title === "LocAid Users");
+                        if (results.length > 0) {
+                            const clickedGraphic = results[0].graphic;
+                            console.log("🖱️ Clicked on user graphic:", clickedGraphic.attributes);
+                            
+                            // Find the full user data from our pre-loaded signUpData
+                            const fullUserData = signUpData.find(feature => {
+                                // Try multiple matching strategies
+                                
+                                // Strategy 1: Match by ObjectID (most reliable)
+                                if (clickedGraphic.attributes && clickedGraphic.attributes.OBJECTID && 
+                                    feature.attributes && feature.attributes.OBJECTID) {
+                                    return clickedGraphic.attributes.OBJECTID === feature.attributes.OBJECTID;
+                                }
+                                
+                                // Strategy 2: Match by FID (Feature ID)
+                                if (clickedGraphic.attributes && clickedGraphic.attributes.FID && 
+                                    feature.attributes && feature.attributes.FID) {
+                                    return clickedGraphic.attributes.FID === feature.attributes.FID;
+                                }
+                                
+                                // Strategy 3: Match by any unique ID field
+                                if (clickedGraphic.attributes && feature.attributes) {
+                                    const clickedAttrs = clickedGraphic.attributes;
+                                    const featureAttrs = feature.attributes;
+                                    
+                                    // Try common ID field names
+                                    const idFields = ['objectid', 'OBJECTID', 'fid', 'FID', 'id', 'ID', 'GlobalID', 'globalid'];
+                                    for (const field of idFields) {
+                                        if (clickedAttrs[field] && featureAttrs[field] && 
+                                            clickedAttrs[field] === featureAttrs[field]) {
+                                            return true;
+                                        }
+                                    }
+                                }
+                                
+                                // Strategy 4: Coordinate matching with larger tolerance
+                                const clickedGeom = clickedGraphic.geometry;
+                                const featureGeom = feature.geometry;
+                                
+                                if (clickedGeom && featureGeom) {
+                                    const tolerance = 0.001; // Increased tolerance for coordinate matching
+                                    return Math.abs(clickedGeom.x - featureGeom.x) < tolerance && 
+                                           Math.abs(clickedGeom.y - featureGeom.y) < tolerance;
+                                }
+                                
+                                return false;
+                            });
+
+                            if (fullUserData) {
+                                selectedFeature = fullUserData; // Use the full feature data
+                                const attrs = fullUserData.attributes;
+                                const name = `${attrs.first_name || ''} ${attrs.last_name || ''}`.trim();
+
+                                document.getElementById('selected-user-info').innerHTML = `
+                                    <strong>Name:</strong> ${name}<br>
+                                    <strong>Phone:</strong> ${attrs.phone_number || 'N/A'}<br>
+                                    <strong>Disability:</strong> ${attrs.disability_type || 'N/A'}
+                                `;
+                                document.getElementById('selected-user-panel').style.display = 'block';
+                                console.log("✅ Selected user:", attrs);
+                            } else {
+                                console.warn("⚠️ Could not find matching user data for clicked graphic");
+                                console.log("Available signUpData sample:", signUpData.length > 0 ? signUpData[0].attributes : "No data loaded");
+                                console.log("Clicked graphic attributes:", clickedGraphic.attributes);
+                                console.log("Clicked graphic geometry:", clickedGraphic.geometry);
+                                
+                                // Fallback to using the clicked graphic directly
+                                selectedFeature = clickedGraphic;
+                                const attrs = clickedGraphic.attributes || {};
+                                const name = `${attrs.first_name || ''} ${attrs.last_name || ''}`.trim();
+                                
+                                document.getElementById('selected-user-info').innerHTML = `
+                                    <strong>Name:</strong> ${name}<br>
+                                    <strong>Phone:</strong> ${attrs.phone_number || 'N/A'}<br>
+                                    <strong>Disability:</strong> ${attrs.disability_type || 'N/A'}
+                                `;
+                                document.getElementById('selected-user-panel').style.display = 'block';
+                            }
+                        }
+                    });
                 });
 
+                // --- Event listener for our new button ---
+                document.getElementById('get-directions-btn').addEventListener('click', () => {
+                    if (selectedFeature && selectedFeature.geometry) {
+                        directionsWidget.reset();
+                        const attrs = selectedFeature.attributes || {};
+                        const name = `${attrs.first_name || ''} ${attrs.last_name || ''}`.trim();
+                        const destinationGraphic = new Graphic({
+                            geometry: selectedFeature.geometry,
+                            attributes: { name: name }
+                        });
+                        directionsWidget.viewModel.stops.splice(1, 1, destinationGraphic);
+                        directionsWidget.focus();
+                    }
+                });
+
+                // Find and configure the Fire Hazard Layer
+                fireHazardLayer = map.allLayers.find(layer => layer.title === "Fire Hazard Severity Zones");
                 if (fireHazardLayer) {
-                    console.log("Successfully found the Fire Hazard Severity Zones layer.");
-                    // Ensure the layer is visible by default for the query to work reliably
+                    console.log("🔥 Found Fire Hazard Severity Zones layer. Waiting for it to load...");
+                    fireHazardLayer.when(() => {
+                        console.log("🔥 Fire Hazard layer is ready!");
+                        appState.fireHazardLayerReady = true;
+                        checkIfAllDataReady();
+                    }).catch(error => {
+                        console.error("❌ Fire Hazard Severity Zones layer failed to load:", error);
+                        updateStatus("Fire Hazard layer failed to load. Notifications disabled.", true);
+                    });
                     fireHazardLayer.visible = true;
                 } else {
-                    console.error("Could not find the 'Fire Hazard Severity Zones' layer. Please check the WebMap configuration.");
-                    updateStatus("Fire Hazard Layer not found!", true);
+                    console.error("❌ Could not find 'Fire Hazard Severity Zones' layer.");
+                    updateStatus("Fire Hazard layer not found. Notifications disabled.", true);
                 }
 
-                // --- Find and log the LocAid User Sign Up layer ---
-                const userSignUpLayer = map.allLayers.find(layer => {
-                    return layer.title === "LocAid Users";
-                });
-
+                // Find and configure the LocAid Users Layer
+                userSignUpLayer = map.allLayers.find(layer => layer.title === "LocAid Users");
                 if (userSignUpLayer) {
-                    console.log("Found 'LocAid Users' layer. Querying features...");
+                    console.log("👥 Found LocAid Users layer. Loading user data...");
+                    userSignUpLayer.popupEnabled = true;
+                    
                     userSignUpLayer.when(() => {
-                        // --- LOG 1: Log the layer's fields to verify names ---
-                        console.log("Verifying 'LocAid Users' fields:", userSignUpLayer.fields.map(f => f.name));
-                        return userSignUpLayer.queryFeatures();
+                        return userSignUpLayer.queryFeatures({
+                            where: "1=1", // Get all records (required by ArcGIS)
+                            outFields: ["*"], // Get all fields
+                            returnGeometry: true // We need geometry for click matching and notifications
+                        });
                     })
                     .then(results => {
-                        console.log(`Successfully queried ${results.features.length} features from the sign-up layer.`);
-                        signUpData = results.features; // Store the features
-                        const userAttributes = signUpData.map(feature => feature.attributes);
-                        console.log("LocAid User Sign Up Data:", userAttributes);
+                        console.log(`👥 Successfully loaded ${results.features.length} user records from LocAid Users layer.`);
+                        signUpData = results.features;
+                        appState.userDataLoaded = true;
+                        
+                        // Log a sample of the data for verification
+                        if (results.features.length > 0) {
+                            const sampleUser = results.features[0].attributes;
+                            console.log("Sample user data:", sampleUser);
+                        }
+                        
+                        checkIfAllDataReady();
                     })
                     .catch(err => {
-                        console.error("Error querying the LocAid Users layer:", err);
+                        console.error("❌ Error loading LocAid Users data:", err);
+                        updateStatus("Failed to load user data. Notifications disabled.", true);
                     });
                 } else {
-                    console.warn("Could not find the 'LocAid Users' layer in the WebMap.");
+                    console.warn("❌ Could not find 'LocAid Users' layer in the WebMap.");
+                    updateStatus("LocAid Users layer not found. Notifications disabled.", true);
                 }
             });
 
