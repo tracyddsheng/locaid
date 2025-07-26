@@ -104,9 +104,9 @@
             <h2>Live Units</h2>
             <div id="live-units-list" style="max-height: 200px; overflow-y: auto;"></div>
             <div id="selected-user-panel" style="display: none; margin-top: 15px;">
-                <h2>Selected User</h2>
+                <h2>Selected Unit</h2>
                 <div id="selected-user-info"></div>
-                <button id="get-directions-btn" style="width: 100%; padding: 10px; font-size: 1em; margin-top: 10px;">Get Directions</button>
+                <button id="copy-coordinates-btn" style="width: 100%; padding: 10px; font-size: 1em; margin-top: 10px; background-color: #28a745; color: white; border: none; border-radius: 3px; cursor: pointer;">Copy Coordinates</button>
             </div>
         </div>
         <div id="viewDiv"></div>
@@ -259,10 +259,16 @@
                 // --- Set up a click listener on the view ---
                 view.on("click", (event) => {
                     view.hitTest(event).then((response) => {
-                        const results = response.results.filter(r => r.graphic.layer && r.graphic.layer.title === "LocAid Users");
-                        if (results.length > 0) {
-                            const clickedGraphic = results[0].graphic;
-                            console.log("🖱️ Clicked on user graphic:", clickedGraphic.attributes);
+                        // Check for LocAid Users first
+                        const locaidResults = response.results.filter(r => r.graphic.layer && r.graphic.layer.title === "LocAid Users");
+                        
+                        // Check for live units (graphics from our graphicsLayer)
+                        const liveUnitResults = response.results.filter(r => r.graphic.layer === graphicsLayer);
+                        
+                        if (locaidResults.length > 0) {
+                            // Handle LocAid Users (existing functionality)
+                            const clickedGraphic = locaidResults[0].graphic;
+                            console.log("🖱️ Clicked on LocAid user graphic:", clickedGraphic.attributes);
                             
                             // Find the full user data from our pre-loaded signUpData
                             const fullUserData = signUpData.find(feature => {
@@ -338,22 +344,78 @@
                                 `;
                                 document.getElementById('selected-user-panel').style.display = 'block';
                             }
+                        } else if (liveUnitResults.length > 0) {
+                            // Handle Live Units (new functionality)
+                            const clickedGraphic = liveUnitResults[0].graphic;
+                            console.log("🖱️ Clicked on live unit graphic:", clickedGraphic.attributes);
+                            
+                            const attrs = clickedGraphic.attributes;
+                            const geometry = clickedGraphic.geometry;
+                            const deviceId = attrs.deviceId;
+                            
+                            // Create a selectedFeature object for the live unit
+                            selectedFeature = {
+                                geometry: geometry,
+                                attributes: {
+                                    deviceId: deviceId,
+                                    type: attrs.type || 'unknown',
+                                    accuracy: attrs.accuracy || 'N/A',
+                                    first_name: deviceId,
+                                    last_name: '',
+                                    phone_number: 'N/A',
+                                    disability_type: attrs.type === 'responder' ? 'First Responder' : 'Live User'
+                                }
+                            };
+                            
+                            const name = deviceId;
+                            const unitType = attrs.type === 'responder' ? 'First Responder' : 'Live User';
+                            
+                            document.getElementById('selected-user-info').innerHTML = `
+                                <strong>Unit ID:</strong> ${name}<br>
+                                <strong>Type:</strong> ${unitType}<br>
+                                <strong>Accuracy:</strong> ${attrs.accuracy || 'N/A'}m<br>
+                                <strong>Coordinates:</strong> ${geometry.latitude.toFixed(6)}, ${geometry.longitude.toFixed(6)}
+                            `;
+                            document.getElementById('selected-user-panel').style.display = 'block';
+                            console.log("✅ Selected live unit from map:", attrs);
                         }
                     });
                 });
 
-                // --- Event listener for our new button ---
-                document.getElementById('get-directions-btn').addEventListener('click', () => {
+                // --- Event listener for copy coordinates button ---
+                document.getElementById('copy-coordinates-btn').addEventListener('click', () => {
                     if (selectedFeature && selectedFeature.geometry) {
-                        directionsWidget.reset();
+                        const coords = selectedFeature.geometry;
                         const attrs = selectedFeature.attributes || {};
                         const name = `${attrs.first_name || ''} ${attrs.last_name || ''}`.trim();
-                        const destinationGraphic = new Graphic({
-                            geometry: selectedFeature.geometry,
-                            attributes: { name: name }
+                        
+                        // Format coordinates in multiple useful formats
+                        const coordText = `${name ? name + ' - ' : ''}Coordinates:
+Decimal Degrees: ${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}
+Lat/Lon: ${coords.latitude.toFixed(6)}°N, ${Math.abs(coords.longitude).toFixed(6)}°W
+Copy/Paste: ${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}`;
+
+                        // Copy to clipboard
+                        navigator.clipboard.writeText(`${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}`).then(() => {
+                            console.log("📋 Coordinates copied to clipboard:", `${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}`);
+                            
+                            // Show a temporary success message
+                            const originalText = document.getElementById('copy-coordinates-btn').textContent;
+                            document.getElementById('copy-coordinates-btn').textContent = 'Copied!';
+                            document.getElementById('copy-coordinates-btn').style.backgroundColor = '#218838';
+                            
+                            setTimeout(() => {
+                                document.getElementById('copy-coordinates-btn').textContent = originalText;
+                                document.getElementById('copy-coordinates-btn').style.backgroundColor = '#28a745';
+                            }, 2000);
+                            
+                        }).catch(err => {
+                            console.error('❌ Failed to copy coordinates:', err);
+                            // Fallback: show coordinates in an alert for manual copying
+                            alert(coordText);
                         });
-                        directionsWidget.viewModel.stops.splice(1, 1, destinationGraphic);
-                        directionsWidget.focus();
+                    } else {
+                        alert('No user selected. Please click on a user first.');
                     }
                 });
 
@@ -462,7 +524,40 @@
             document.getElementById('live-units-list').addEventListener('click', (event) => {
                 const deviceId = event.target.dataset.deviceId;
                 if (deviceId && liveGraphics[deviceId]) {
+                    // Zoom to the live unit
                     view.goTo(liveGraphics[deviceId].point.geometry);
+                    
+                    // Populate the selected user panel with live unit info
+                    const liveUnit = liveGraphics[deviceId];
+                    const attrs = liveUnit.point.attributes;
+                    const geometry = liveUnit.point.geometry;
+                    
+                    // Create a selectedFeature object similar to the LocAid Users
+                    selectedFeature = {
+                        geometry: geometry,
+                        attributes: {
+                            deviceId: deviceId,
+                            type: attrs.type || 'unknown',
+                            accuracy: attrs.accuracy || 'N/A',
+                            // For live units, we don't have first_name/last_name, so we'll use deviceId
+                            first_name: deviceId,
+                            last_name: '',
+                            phone_number: 'N/A',
+                            disability_type: attrs.type === 'responder' ? 'First Responder' : 'Live User'
+                        }
+                    };
+                    
+                    const name = deviceId;
+                    const unitType = attrs.type === 'responder' ? 'First Responder' : 'Live User';
+                    
+                    document.getElementById('selected-user-info').innerHTML = `
+                        <strong>Unit ID:</strong> ${name}<br>
+                        <strong>Type:</strong> ${unitType}<br>
+                        <strong>Accuracy:</strong> ${attrs.accuracy || 'N/A'}m<br>
+                        <strong>Coordinates:</strong> ${geometry.latitude.toFixed(6)}, ${geometry.longitude.toFixed(6)}
+                    `;
+                    document.getElementById('selected-user-panel').style.display = 'block';
+                    console.log("✅ Selected live unit:", attrs);
                 }
             });
 
