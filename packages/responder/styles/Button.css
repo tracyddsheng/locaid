@@ -1,0 +1,42 @@
+.button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #990909;
+    color: #fff;
+    border: none;
+    border-radius: 999px;
+    padding: 0.75em 2em;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+    gap: 0.5em;
+}
+
+.button:hover,
+.button:focus {
+    outline: none;
+    transform: scale(1.03);
+    text-decoration: underline;
+}
+
+.button img {
+    height: 1.2em;
+    width: 1.2em;
+    object-fit: contain;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+.button-settings {
+    color: #4a4a4a;
+    font-size: 1.5rem;
+    padding: 8px 12px;
+    border-radius: 999px;
+}
+
+.button-settings:hover {
+    background-color: #333333;
+    border-radius: 999px;
+}

@@ -1,0 +1,29 @@
+.search-bar {
+    position: relative;
+    padding: 1rem;
+    background: white;
+    box-shadow: 0 -2px 4px rgba(0,0,0,0.1);
+}
+
+.search-input {
+    width: 100%;
+    padding: 12px 40px 12px 16px;
+    border: 1px solid #ddd;
+    border-radius: 24px;
+    font-size: 1rem;
+    color: #666;
+    background: white;
+}
+
+.search-input::placeholder {
+    color: #999;
+}
+
+.search-icon {
+    position: absolute;
+    right: 28px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #999;
+    pointer-events: none;
+}
