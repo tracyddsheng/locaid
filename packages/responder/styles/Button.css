@@ -41,12 +41,12 @@
     border-radius: 999px;
 }
 
-/* .button-filter {
-    background-color: rgba(128, 128, 128, 0.3); /* translucent gray */
-    color: #000;
+.button-filter {
+    background-color: #181818d3;
+    top: 1rem;
+    left: 1rem;
     position: absolute;
-    bottom: 80px;
-    left: 16px;
+    padding: 0.75rem 1rem;
     z-index: 10;
     border: 1px solid #aaa;
-} */
+}
