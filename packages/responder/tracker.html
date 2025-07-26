@@ -110,7 +110,7 @@
         }
 
         .logo {
-            height: 40px;
+            height: 50px;
         }
 
         .main-content {
@@ -173,12 +173,7 @@
 <body>
     <header class="header" style="background-color: white;">
         <img src="src/assets/logo_red.png" alt="LocAid Logo" class="logo">
-        <button class="button button-alt" onclick="window.location.href='tracker.html'">
-            Request Assistance
-        </button>
-        <button class="button" onclick="window.location.href='tracker.html'">
-            Call 911
-        </button>
+        <button id="toggle-arrow-btn" class="button hidden" style="background-color: #990909;">Show Arrow</button>
         <button class="button-settings">☰</button>
     </header>
 
@@ -200,7 +195,6 @@
         <div class="button-group">
             <!-- <div id="status">Status: Idle</div> -->
             <button id="filter-layers-btn" class="button">Filter Layers</button>
-            <button id="toggle-arrow-btn" class="button hidden" style="background-color: #990909;">Show Arrow</button>
             <!-- <button id="test-compass-btn" class="button hidden" style="background-color: #34c759;">Test Compass</button> -->
            <!-- <button id="calibrate-compass-btn" class="button hidden" style="background-color: #ff9500;">Set North</button> -->
             <!-- <button id="startBtn" class="button">Share my location</button> -->
