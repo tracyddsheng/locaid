@@ -51,10 +51,11 @@
 
         #arrow-container {
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 120px;
+            height: 120px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -63,9 +64,8 @@
         }
 
         #arrow {
-            font-size: 120px;
-            color: #990909;
-            text-shadow: 0 0 15px rgba(153, 9, 9, 0.8), 0 0 30px rgba(255, 255, 255, 0.9);
+            width: 80px;
+            height: 80px;
             transition: transform 0.2s ease-out;
             filter: drop-shadow(0 0 10px rgba(153, 9, 9, 0.5));
         }
@@ -110,7 +110,7 @@
         }
 
         .logo {
-            height: 40px;
+            height: 50px;
         }
 
         .main-content {
@@ -172,10 +172,8 @@
 
 <body>
     <header class="header" style="background-color: white;">
-        <img src="src/assets/logo.png" alt="LocAid Logo" class="logo">
-        <button class="button" onclick="window.location.href='tracker.html'">
-            Call 911
-        </button>
+        <img src="src/assets/logo_red.png" alt="LocAid Logo" class="logo">
+        <button id="toggle-arrow-btn" class="button hidden" style="background-color: #990909;">Show Arrow</button>
         <button class="button-settings">☰</button>
     </header>
 
@@ -197,7 +195,6 @@
         <div class="button-group">
             <!-- <div id="status">Status: Idle</div> -->
             <button id="filter-layers-btn" class="button">Filter Layers</button>
-            <button id="toggle-arrow-btn" class="button hidden" style="background-color: #990909;">Show Arrow</button>
             <!-- <button id="test-compass-btn" class="button hidden" style="background-color: #34c759;">Test Compass</button> -->
            <!-- <button id="calibrate-compass-btn" class="button hidden" style="background-color: #ff9500;">Set North</button> -->
             <!-- <button id="startBtn" class="button">Share my location</button> -->
@@ -207,7 +204,7 @@
     </main>    
 
     <div id="arrow-container" class="hidden">
-        <div id="arrow">⬆️</div>
+        <img id="arrow" src="src/assets/arrow.png" alt="Direction Arrow">
     </div>
 
 </body>
@@ -531,7 +528,8 @@
             const bearing = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360; // Corrected bearing calculation
 
             // Apply the device's compass heading to orient the arrow correctly
-            const rotation = bearing - latestHeading;
+            // Add 180° because the arrow image points down instead of up
+            const rotation = bearing - latestHeading + 180;
             console.log('🎯 Arrow calc - Bearing:', bearing.toFixed(1), '° | Compass:', latestHeading, '° | Final rotation:', rotation.toFixed(1), '°');
             arrow.style.transform = `rotate(${rotation}deg) scale(1)`;
 
