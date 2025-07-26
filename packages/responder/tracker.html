@@ -292,6 +292,7 @@
             return;
         }
         isResponder = responderMode;
+        console.log('📍 Starting tracking - isResponder:', isResponder, 'responderMode:', responderMode);
         updateStatus('Starting tracker... Waiting for position.');
 
         watchId = navigator.geolocation.watchPosition(
@@ -317,8 +318,8 @@
             setupWebSocket();
             // Show the responder buttons
             toggleArrowBtn.classList.remove('hidden');
-            testCompassBtn.classList.remove('hidden');
-            calibrateCompassBtn.classList.remove('hidden');
+            if (testCompassBtn) testCompassBtn.classList.remove('hidden');
+            if (calibrateCompassBtn) calibrateCompassBtn.classList.remove('hidden');
         }
 
         // startBtn.classList.add('hidden');
@@ -344,8 +345,8 @@
         toggleArrowBtn.classList.add('hidden');
         toggleArrowBtn.textContent = 'Show Arrow';
         toggleArrowBtn.style.backgroundColor = '#990909';
-        testCompassBtn.classList.add('hidden');
-        calibrateCompassBtn.classList.add('hidden');
+        if (testCompassBtn) testCompassBtn.classList.add('hidden');
+        if (calibrateCompassBtn) calibrateCompassBtn.classList.add('hidden');
         updateStatus('Tracking stopped.');
     }
 
@@ -443,6 +444,8 @@
     }
 
     function toggleArrow() {
+        console.log('🎯 Toggle arrow clicked! Current state:', { arrowVisible, compassSetup, isResponder });
+        
         if (!arrowVisible) {
             // Showing arrow - request compass permission first
             if (!compassSetup) {
@@ -538,12 +541,13 @@
     }
 
     // Auto-start tracking in the appropriate mode
+    console.log('🚀 Starting tracker with:', { responderModeFromURL, deviceId });
     startTracking(responderModeFromURL);
 
     // Add event listener for responder buttons
     toggleArrowBtn.addEventListener('click', toggleArrow);
-    testCompassBtn.addEventListener('click', testCompass);
-    calibrateCompassBtn.addEventListener('click', calibrateCompass);
+    if (testCompassBtn) testCompassBtn.addEventListener('click', testCompass);
+    if (calibrateCompassBtn) calibrateCompassBtn.addEventListener('click', calibrateCompass);
 
     //         document.addEventListener('DOMContentLoaded', () => {
     // startBtn.addEventListener('click', () => startTracking(false));

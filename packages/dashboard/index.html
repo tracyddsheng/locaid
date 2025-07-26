@@ -305,6 +305,21 @@
                 }
             }
 
+            function formatPhoneNumber(phone) {
+                if (!phone || phone === 'N/A') return 'N/A';
+                
+                // Convert to string and remove any existing formatting
+                const phoneStr = String(phone).replace(/\D/g, '');
+                
+                // Format as (XXX) XXX-XXXX if it's a 10-digit number
+                if (phoneStr.length === 10) {
+                    return `(${phoneStr.slice(0, 3)}) ${phoneStr.slice(3, 6)}-${phoneStr.slice(6)}`;
+                }
+                
+                // For other lengths, just return as string without commas
+                return String(phone).replace(/,/g, '');
+            }
+
             const map = new WebMap({
                 portalItem: {
                     id: "0d8708f95c71433daa14f4ad6965ff2d"
@@ -347,9 +362,46 @@
             const directionsWidget = new Directions({
                 view: view,
                 layer: routeLayer,
-                routeServiceUrl: "https://route-api.arcgis.com/arcgis/rest/services/World/Route/NAServer/Route_World"
+                routeServiceUrl: "https://route-api.arcgis.com/arcgis/rest/services/World/Route/NAServer/Route_World",
+                // Customize the widget to only show driving time
+                visibleElements: {
+                    saveButton: false,
+                    saveAsButton: false
+                }
             });
             view.ui.add(directionsWidget, "top-right");
+
+            // Hide unwanted elements in the directions widget
+            directionsWidget.when(() => {
+                // Add custom CSS to hide travel mode dropdown and departure time
+                const style = document.createElement('style');
+                style.textContent = `
+                    /* Hide travel mode dropdown - keep only driving time */
+                    .esri-directions__travel-modes,
+                    .esri-directions__travel-mode-selector {
+                        display: none !important;
+                    }
+                    
+                    /* Hide departure time dropdown */
+                    .esri-directions__departure-time,
+                    .esri-directions__departure-time-selector {
+                        display: none !important;
+                    }
+                    
+                    /* Hide save buttons */
+                    .esri-directions__save-button,
+                    .esri-directions__save-as-button {
+                        display: none !important;
+                    }
+                    
+                    /* Make the directions widget more compact */
+                    .esri-directions__header {
+                        padding: 8px !important;
+                    }
+                `;
+                document.head.appendChild(style);
+                console.log('🗺️ Directions widget customized - showing only driving time');
+            });
 
             const layerList = new LayerList({
                 view: view,
@@ -428,7 +480,7 @@
 
                                 document.getElementById('selected-user-info').innerHTML = `
                                     <strong>Name:</strong> ${name}<br>
-                                    <strong>Phone:</strong> ${attrs.phone_number || 'N/A'}<br>
+                                    <strong>Phone:</strong> ${formatPhoneNumber(attrs.phone_number)}<br>
                                     <strong>Disability:</strong> ${attrs.disability_type || 'N/A'}
                                 `;
                                 document.getElementById('selected-user-panel').style.display = 'block';
@@ -446,7 +498,7 @@
                                 
                                 document.getElementById('selected-user-info').innerHTML = `
                                     <strong>Name:</strong> ${name}<br>
-                                    <strong>Phone:</strong> ${attrs.phone_number || 'N/A'}<br>
+                                    <strong>Phone:</strong> ${formatPhoneNumber(attrs.phone_number)}<br>
                                     <strong>Disability:</strong> ${attrs.disability_type || 'N/A'}
                                 `;
                                 document.getElementById('selected-user-panel').style.display = 'block';
@@ -799,7 +851,7 @@ Copy/Paste: ${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}`;
                 const list = document.getElementById('notified-users-list');
                 list.innerHTML = '<ul>' + users.map(user => {
                     const name = `${user.attributes.first_name || ''} ${user.attributes.last_name || ''}`.trim() || 'N/A';
-                    const phone = user.attributes.phone_number || 'N/A';
+                    const phone = formatPhoneNumber(user.attributes.phone_number);
                     return `<li><strong>${name}</strong> - ${phone}</li>`;
                 }).join('') + '</ul>';
 
