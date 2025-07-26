@@ -76,6 +76,9 @@
     </style>
 
     <link rel="stylesheet" href="styles/SearchBar.css">
+
+    <title>Location Tracker</title>
+
     <!-- Load Calcite components from CDN -->
     <script type="module" src="https://js.arcgis.com/calcite-components/3.2.1/calcite.esm.js"></script>
     <!-- Load the ArcGIS Maps SDK for JavaScript from CDN -->
@@ -95,7 +98,7 @@
         }
 
         .header {
-            width: 100%;
+            width: 95%;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -115,6 +118,7 @@
             align-items: center;
             justify-content: center;
             text-align: center;
+            height: 100%;
         }
 
         .welcome-text {
@@ -168,7 +172,7 @@
     <header class="header" style="background-color: white;">
         <img src="src/assets/logo.png" alt="LocAid Logo" class="logo">
         <button class="button" onclick="window.location.href='tracker.html'">
-            Call For Help
+            Call 911
         </button>
         <button class="button-settings">☰</button>
     </header>
@@ -195,7 +199,7 @@
             <!-- <button id="responderBtn" class="button">Responder Mode</button>
             <button id="stopBtn" class="button hidden">Stop Tracking</button> -->
         </div>
-    </div>
+    </main>    
 
     <!-- <div id="arrow-container" class="hidden">
         <div id="arrow">⬆️</div>

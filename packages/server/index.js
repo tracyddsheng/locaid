@@ -5,63 +5,62 @@ import path from 'path';
 import selfsigned from 'selfsigned';
 import cors from 'cors';
 import { fileURLToPath } from 'url';
+import { STATIC_ADDRESSES, LIVE_TRACKERS_START } from './src/testData.js';
+import nodemailer from 'nodemailer';
+import dotenv from 'dotenv';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// --- TEST DATA SIMULATION ---
-// Define several smaller, land-locked bounding boxes within LA County
-const LA_LAND_ZONES = [
-    { name: "Downtown", lat: { min: 34.03, max: 34.07 }, lon: { min: -118.28, max: -118.22 } },
-    { name: "Santa Monica", lat: { min: 34.00, max: 34.04 }, lon: { min: -118.50, max: -118.45 } },
-    { name: "San Fernando Valley", lat: { min: 34.15, max: 34.20 }, lon: { min: -118.48, max: -118.40 } },
-    { name: "Pasadena", lat: { min: 34.12, max: 34.16 }, lon: { min: -118.18, max: -118.12 } },
-    { name: "Long Beach", lat: { min: 33.76, max: 33.80 }, lon: { min: -118.20, max: -118.15 } }
-];
+// Explicitly load the .env file from the same directory as this script.
+dotenv.config({ path: path.resolve(__dirname, '.env') });
 
-const staticAddresses = [];
-const liveTrackers = [];
+
+// --- Nodemailer with Gmail Setup ---
+let transporter;
+async function setupEmailTransporter() {
+    // Check if we have credentials for a real email service
+    if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+        console.log("✉️  Configuring Nodemailer to use Gmail...");
+        transporter = nodemailer.createTransport({
+            service: 'gmail',
+            auth: {
+                user: process.env.EMAIL_USER,
+                pass: process.env.EMAIL_PASS,
+            },
+        });
+    } else {
+        // Fallback to Ethereal for testing if no credentials are provided
+        console.log("✉️  No email credentials found, falling back to Ethereal for testing.");
+        let testAccount = await nodemailer.createTestAccount();
+        transporter = nodemailer.createTransport({
+            host: "smtp.ethereal.email",
+            port: 587,
+            secure: false, 
+            auth: {
+                user: testAccount.user, 
+                pass: testAccount.pass,
+            },
+        });
+    }
+}
+setupEmailTransporter().catch(console.error);
+
+
+// --- TEST DATA SIMULATION ---
+let staticAddresses = [];
+let liveTrackers = [];
 
 function getRandomInRange(min, max, decimals = 6) {
     return parseFloat((Math.random() * (max - min) + min).toFixed(decimals));
 }
 
 function initializeTestData() {
-    // 1. Create 100 static disabled addresses within land-locked zones
-    for (let i = 0; i < 100; i++) {
-        const zone = LA_LAND_ZONES[Math.floor(Math.random() * LA_LAND_ZONES.length)];
-        staticAddresses.push({
-            deviceId: `address_${i}`,
-            latitude: getRandomInRange(zone.lat.min, zone.lat.max),
-            longitude: getRandomInRange(zone.lon.min, zone.lon.max),
-            type: 'address'
-        });
-    }
+    // Use a deep copy to prevent the simulation from altering the original data
+    staticAddresses = JSON.parse(JSON.stringify(STATIC_ADDRESSES));
+    liveTrackers = JSON.parse(JSON.stringify(LIVE_TRACKERS_START));
 
-    // 2. Create 20 first responders
-    for (let i = 0; i < 20; i++) {
-        const zone = LA_LAND_ZONES[Math.floor(Math.random() * LA_LAND_ZONES.length)];
-        liveTrackers.push({
-            deviceId: `responder_${i}`,
-            latitude: getRandomInRange(zone.lat.min, zone.lat.max),
-            longitude: getRandomInRange(zone.lon.min, zone.lon.max),
-            accuracy: getRandomInRange(5, 20, 0),
-            type: 'responder'
-        });
-    }
-
-    // 3. Create 40 live disabled users
-    for (let i = 0; i < 40; i++) {
-        const zone = LA_LAND_ZONES[Math.floor(Math.random() * LA_LAND_ZONES.length)];
-        liveTrackers.push({
-            deviceId: `user_${i}`,
-            latitude: getRandomInRange(zone.lat.min, zone.lat.max),
-            longitude: getRandomInRange(zone.lon.min, zone.lon.max),
-            accuracy: getRandomInRange(5, 20, 0),
-            type: 'user'
-        });
-    }
-    console.log(`Initialized ${staticAddresses.length} static addresses and ${liveTrackers.length} live trackers.`);
+    console.log(`Initialized ${staticAddresses.length} static addresses and ${liveTrackers.length} live trackers from static data.`);
 }
 
 function simulateLiveMovement() {
@@ -125,13 +124,61 @@ app.post('/location', (req, res) => {
   }
 });
 
+app.post('/send-notification', async (req, res) => {
+    const { email, name } = req.body;
+    if (!email || !name) {
+        return res.status(400).json({ error: 'Missing required fields: email, name' });
+    }
+
+    const subject = "Urgent: Please Share Your Location for Emergency Response";
+    const htmlContent = `
+        <h1>Emergency Alert - Location Request</h1>
+        <p>Hello ${name},</p>
+        <p>This is an urgent request from the emergency response team. Due to a developing situation in your area, we are asking you to share your live location so we can provide assistance if needed.</p>
+        <p>Please click the link below on your mobile device to begin sharing your location:</p>
+        <p><a href="https://10.150.92.15:3000/packages/responder/index.html" style="font-size: 16px; padding: 12px 20px; background-color: #a43a3a; color: white; text-decoration: none; border-radius: 5px;">Share Location</a></p>
+        <p>Your safety is our top priority. Thank you for your cooperation.</p>
+        <hr>
+        <p><em>This is an automated message from the LocAid Emergency Response System.</em></p>
+    `;
+
+    try {
+        if (!transporter) {
+            return res.status(503).json({ error: "Email service is not yet available. Please try again in a moment." });
+        }
+        
+        const info = await transporter.sendMail({
+            from: '"LocAid Alerts" <alerts@locaid.com>', // sender address
+            to: email, // list of receivers
+            subject: subject, // Subject line
+            html: htmlContent, // html body
+        });
+
+        // If using Ethereal, log the preview URL
+        if (transporter.options.host === 'smtp.ethereal.email') {
+            const previewUrl = nodemailer.getTestMessageUrl(info);
+            console.log(`Email sent: ${info.messageId}`);
+            console.log(`Preview URL: ${previewUrl}`);
+            return res.status(200).json({ message: 'Email sent to test account!', previewUrl: previewUrl });
+        }
+
+        console.log(`Email sent successfully to ${email}:`, info.messageId);
+        return res.status(200).json({ message: 'Email sent successfully!', messageId: info.messageId });
+
+    } catch (error) {
+        console.error('API Handler Error:', error);
+        return res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+
 const PORT = 3000;
 server.listen(PORT, () => {
   console.log(`Server listening on https://localhost:${PORT}`);
   console.log(`Mobile client URL: https://localhost:${PORT}/packages/responder/index.html`);
-  console.log(`Dashboard client URL: https://localhost:${PORT}/packages/dashboard/index.html`);
+  console.log(`Dashboard client URL: https://localhost:${PORT}/packages/dashboard/login.html`);
 
-  initializeTestData();
-  // Start the simulation loop
-  setInterval(simulateLiveMovement, 2000);
+  // initializeTestData();
+  // // Start the simulation loop
+  // setInterval(simulateLiveMovement, 2000);
 });

@@ -1,3 +1,10 @@
+.env files:
+packages/server/.env
+contains 
+EMAIL_USER=__________
+EMAIL_PASS=__________
+Get email_pass from https://myaccount.google.com/apppasswords 
+
 # Real-Time Location Tracking and Visualization Dashboard
 
 This project is a complete, end-to-end web application that allows a mobile device to broadcast its real-time GPS location to a central server, which then relays that location to a desktop web browser where the location is visualized live on an interactive map.
@@ -33,7 +40,7 @@ The project is a monorepo with the following structure:
 3.  **Access the Clients:**
 
     *   **Mobile Client:** Open a web browser on your mobile device and navigate to `https://<YOUR_COMPUTER_IP>:3000/packages/responder/index.html`.
-    *   **Desktop Dashboard Client:** Open a web browser on your desktop and navigate to `https://localhost:3000/packages/dashboard/index.html`.
+    *   **Desktop Dashboard Client:** Open a web browser on your desktop and navigate to `https://localhost:3000/packages/dashboard/login.html`.
 
     **Important:** When you first access these URLs, your browser will display a security warning because the application uses a self-signed SSL certificate. You will need to bypass this warning to proceed. Look for an "Advanced" or "Details" option and then choose to "Proceed to..." the site. You will need to do this on both your desktop and mobile devices.
 
