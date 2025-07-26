@@ -63,11 +63,9 @@
         }
 
         #arrow {
-            font-size: 120px;
-            color: #990909;
-            text-shadow: 0 0 15px rgba(153, 9, 9, 0.8), 0 0 30px rgba(255, 255, 255, 0.9);
+            font-size: 100px;
+            text-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
             transition: transform 0.2s ease-out;
-            filter: drop-shadow(0 0 10px rgba(153, 9, 9, 0.5));
         }
 
         .button-group {
@@ -197,18 +195,15 @@
         <div class="button-group">
             <!-- <div id="status">Status: Idle</div> -->
             <button id="filter-layers-btn" class="button">Filter Layers</button>
-            <button id="toggle-arrow-btn" class="button hidden" style="background-color: #990909;">Show Arrow</button>
-            <!-- <button id="test-compass-btn" class="button hidden" style="background-color: #34c759;">Test Compass</button> -->
-           <!-- <button id="calibrate-compass-btn" class="button hidden" style="background-color: #ff9500;">Set North</button> -->
             <!-- <button id="startBtn" class="button">Share my location</button> -->
             <!-- <button id="responderBtn" class="button">Responder Mode</button>
             <button id="stopBtn" class="button hidden">Stop Tracking</button> -->
         </div>
     </main>    
 
-    <div id="arrow-container" class="hidden">
+    <!-- <div id="arrow-container" class="hidden">
         <div id="arrow">⬆️</div>
-    </div>
+    </div> -->
 
 </body>
 <script defer>
@@ -223,35 +218,24 @@
     const statusDiv = document.getElementById('status');
     const arrowContainer = document.getElementById('arrow-container');
     const arrow = document.getElementById('arrow');
-    const toggleArrowBtn = document.getElementById('toggle-arrow-btn');
-    const testCompassBtn = document.getElementById('test-compass-btn');
-    const calibrateCompassBtn = document.getElementById('calibrate-compass-btn');
-
-    // --- CHECK URL PARAMETERS ---
-    const urlParams = new URLSearchParams(window.location.search);
-    const responderModeFromURL = urlParams.get('mode') === 'responder';
 
     // --- STATE ---
     let watchId = null;
     let deviceId = getOrSetDeviceId(); // Use a stable, persistent Device ID
-    let isResponder = responderModeFromURL; // Start as responder if URL parameter is set
+    let isResponder = false;
     let socket = null;
     let users = {}; // Store locations of other users
     let latestHeading = 0; // Store the compass heading
-    let arrowVisible = false; // Track arrow visibility state
-    let compassSetup = false; // Track if compass has been set up
 
     // --- FUNCTIONS ---
     function getOrSetDeviceId() {
-        const storageKey = responderModeFromURL ? 'responderDeviceId' : 'trackerDeviceId';
-        const storedId = localStorage.getItem(storageKey);
+        const storedId = localStorage.getItem('trackerDeviceId');
         if (storedId) {
             return storedId;
         }
         // Create a new ID if one isn't stored
-        const prefix = responderModeFromURL ? 'responder' : 'user';
-        const newId = `${prefix}_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-        localStorage.setItem(storageKey, newId);
+        const newId = `device-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+        localStorage.setItem('trackerDeviceId', newId);
         return newId;
     }
 
@@ -271,8 +255,6 @@
             timestamp: new Date().toISOString(),
             type: isResponder ? 'responder' : 'user'
         };
-
-
 
         try {
             const response = await fetch(SERVER_URL, {
@@ -314,11 +296,10 @@
         }, SEND_INTERVAL_MS);
 
         if (isResponder) {
+            // Request compass permissions and set up listeners
+            setupDeviceOrientation();
             setupWebSocket();
-            // Show the responder buttons
-            toggleArrowBtn.classList.remove('hidden');
-            testCompassBtn.classList.remove('hidden');
-            calibrateCompassBtn.classList.remove('hidden');
+            arrowContainer.classList.remove('hidden');
         }
 
         // startBtn.classList.add('hidden');
@@ -336,16 +317,11 @@
         watchId = null;
         isResponder = false;
         window.latestPosition = null;
-        arrowVisible = false;
-        compassSetup = false;
 
-        // Reset UI elements
+        startBtn.classList.remove('hidden');
+        responderBtn.classList.remove('hidden');
+        stopBtn.classList.add('hidden');
         arrowContainer.classList.add('hidden');
-        toggleArrowBtn.classList.add('hidden');
-        toggleArrowBtn.textContent = 'Show Arrow';
-        toggleArrowBtn.style.backgroundColor = '#990909';
-        testCompassBtn.classList.add('hidden');
-        calibrateCompassBtn.classList.add('hidden');
         updateStatus('Tracking stopped.');
     }
 
@@ -370,135 +346,37 @@
 
     // --- New Compass/Orientation Functions ---
     function setupDeviceOrientation() {
-        console.log('🧭 Setting up device orientation with user gesture...');
-        
-        return new Promise((resolve, reject) => {
-            // Check for the iOS 13+ permission model
-            if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-                console.log('🧭 iOS 13+ detected, requesting permission...');
-                DeviceOrientationEvent.requestPermission()
-                    .then(permissionState => {
-                        console.log('🧭 Permission result:', permissionState);
-                        if (permissionState === 'granted') {
-                            window.addEventListener('deviceorientation', handleOrientation);
-                            console.log('🧭 Device orientation listener added for iOS');
-                            compassSetup = true;
-                            
-                            // Test compass after setup
-                            setTimeout(() => {
-                                console.log('🧭 After 2 seconds, latest heading:', latestHeading);
-                                resolve();
-                            }, 2000);
-                        } else {
-                            reject(new Error('Compass permission denied'));
-                        }
-                    })
-                    .catch(error => {
-                        console.error('🧭 Permission error:', error);
-                        reject(error);
-                    });
-            } else {
-                // Handle non-iOS 13+ devices (Android, older iOS)
-                console.log('🧭 Non-iOS 13+ device, adding orientation listener...');
-                window.addEventListener('deviceorientation', handleOrientation);
-                
-                // Also try absolute orientation for better compass on Android
-                if ('DeviceOrientationEvent' in window && 'ondeviceorientationabsolute' in window) {
-                    console.log('🧭 Adding absolute orientation listener for Android...');
-                    window.addEventListener('deviceorientationabsolute', handleOrientation);
-                }
-                
-                compassSetup = true;
-                
-                // Test compass after setup
-                setTimeout(() => {
-                    console.log('🧭 After 2 seconds, latest heading:', latestHeading);
-                    if (latestHeading === 0) {
-                        console.log('🧭 WARNING: Compass may not be working - still showing 0°');
+        // Check for the iOS 13+ permission model
+        if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+            DeviceOrientationEvent.requestPermission()
+                .then(permissionState => {
+                    if (permissionState === 'granted') {
+                        window.addEventListener('deviceorientation', handleOrientation);
+                    } else {
+                        updateStatus('Compass permission was not granted.', true);
                     }
-                    resolve();
-                }, 2000);
-            }
-        });
+                })
+                .catch(error => {
+                    updateStatus('Error requesting compass permission.', true)
+                    console.error(error);
+                });
+        } else {
+            // Handle non-iOS 13+ devices
+            window.addEventListener('deviceorientation', handleOrientation);
+        }
     }
 
     function handleOrientation(event) {
         // Use webkitCompassHeading if available (for iOS), otherwise use alpha
         let heading = event.alpha;
         if (typeof event.webkitCompassHeading !== "undefined") {
-            heading = event.webkitCompassHeading; 
+            heading = event.webkitCompassHeading;
         }
-        
-        // Handle null/undefined values
-        if (heading === null || heading === undefined) {
-            heading = 0;
-        }
-        
         latestHeading = heading;
-        
-        // Debug: Show compass values on screen
-        if (isResponder && arrowVisible) {
-            console.log('🧭 Compass - Alpha:', event.alpha, 'WebKit:', event.webkitCompassHeading, 'Using:', heading);
-        }
-    }
-
-    function toggleArrow() {
-        if (!arrowVisible) {
-            // Showing arrow - request compass permission first
-            if (!compassSetup) {
-                console.log('🧭 Requesting compass access with user gesture...');
-                setupDeviceOrientation().then(() => {
-                    // Permission granted, show arrow
-                    arrowVisible = true;
-                    arrowContainer.classList.remove('hidden');
-                    toggleArrowBtn.textContent = 'Hide Arrow';
-                    toggleArrowBtn.style.backgroundColor = '#7a0707';
-                    findNearestUserAndPoint();
-                }).catch(error => {
-                    console.error('🧭 Failed to setup compass:', error);
-                    updateStatus('Compass permission denied. Arrow will point assuming north is up.', true);
-                    // Show arrow anyway, but it won't rotate with compass
-                    arrowVisible = true;
-                    arrowContainer.classList.remove('hidden');
-                    toggleArrowBtn.textContent = 'Hide Arrow';
-                    toggleArrowBtn.style.backgroundColor = '#7a0707';
-                    findNearestUserAndPoint();
-                });
-            } else {
-                // Compass already set up, just show arrow
-                arrowVisible = true;
-                arrowContainer.classList.remove('hidden');
-                toggleArrowBtn.textContent = 'Hide Arrow';
-                toggleArrowBtn.style.backgroundColor = '#7a0707';
-                findNearestUserAndPoint();
-            }
-        } else {
-            // Hiding arrow
-            arrowVisible = false;
-            arrowContainer.classList.add('hidden');
-            toggleArrowBtn.textContent = 'Show Arrow';
-            toggleArrowBtn.style.backgroundColor = '#990909';
-        }
-    }
-
-    function testCompass() {
-        alert(`Current compass reading:\n\nHeading: ${latestHeading}°\n\nRotate your phone and try again to see if the value changes.\n\nIf it stays at 0°, the compass isn't working.`);
-    }
-
-    function calibrateCompass() {
-        if (!compassSetup) {
-            alert('Please click "Show Arrow" first to request compass permission.');
-            return;
-        }
-        
-        alert(`Point your phone towards NORTH and click OK.\n\nCurrent reading: ${latestHeading}°\n\nThis will calibrate the arrow direction.`);
-        
-        // For now, just show current reading - we can add manual offset later if needed
-        console.log('🧭 Manual calibration - current heading:', latestHeading);
     }
 
     function findNearestUserAndPoint() {
-        if (!arrowVisible || !window.latestPosition || Object.keys(users).length === 0) {
+        if (!window.latestPosition || Object.keys(users).length === 0) {
             arrow.style.transform = 'rotate(0deg) scale(0)';
             return;
         }
@@ -522,28 +400,21 @@
             const lon1 = myLon * Math.PI / 180;
             const lat2 = nearestUser.latitude * Math.PI / 180;
             const lon2 = nearestUser.longitude * Math.PI / 180;
-            
+
             const y = Math.sin(lon2 - lon1) * Math.cos(lat2);
             const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(lon2 - lon1);
             const bearing = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360; // Corrected bearing calculation
 
             // Apply the device's compass heading to orient the arrow correctly
             const rotation = bearing - latestHeading;
-            console.log('🎯 Arrow calc - Bearing:', bearing.toFixed(1), '° | Compass:', latestHeading, '° | Final rotation:', rotation.toFixed(1), '°');
             arrow.style.transform = `rotate(${rotation}deg) scale(1)`;
 
         } else {
-             arrow.style.transform = 'rotate(0deg) scale(0)';
+            arrow.style.transform = 'rotate(0deg) scale(0)';
         }
     }
 
-    // Auto-start tracking in the appropriate mode
-    startTracking(responderModeFromURL);
-
-    // Add event listener for responder buttons
-    toggleArrowBtn.addEventListener('click', toggleArrow);
-    testCompassBtn.addEventListener('click', testCompass);
-    calibrateCompassBtn.addEventListener('click', calibrateCompass);
+    startTracking(false);
 
     //         document.addEventListener('DOMContentLoaded', () => {
     // startBtn.addEventListener('click', () => startTracking(false));
