@@ -136,7 +136,7 @@ app.post('/send-notification', async (req, res) => {
         <p>Hello ${name},</p>
         <p>This is an urgent request from the emergency response team. Due to a developing situation in your area, we are asking you to share your live location so we can provide assistance if needed.</p>
         <p>Please click the link below on your mobile device to begin sharing your location:</p>
-        <p><a href="https://10.150.92.15:3000/packages/responder/index.html" style="font-size: 16px; padding: 12px 20px; background-color: #a43a3a; color: white; text-decoration: none; border-radius: 5px;">Share Location</a></p>
+        <p><a href="https://10.150.92.15:3000/packages/user/index.html" style="font-size: 16px; padding: 12px 20px; background-color: #990909; color: white; text-decoration: none; border-radius: 5px;">Share Location</a></p>
         <p>Your safety is our top priority. Thank you for your cooperation.</p>
         <hr>
         <p><em>This is an automated message from the LocAid Emergency Response System.</em></p>
@@ -174,9 +174,11 @@ app.post('/send-notification', async (req, res) => {
 
 const PORT = 3000;
 server.listen(PORT, () => {
-  console.log(`Server listening on https://localhost:${PORT}`);
-  console.log(`Mobile client URL: https://localhost:${PORT}/packages/responder/index.html`);
-  console.log(`Dashboard client URL: https://localhost:${PORT}/packages/dashboard/login.html`);
+  console.log(`🚀 LocAid Server listening on https://localhost:${PORT}`);
+  console.log(`\n📱 Client URLs:`);
+  console.log(`   👥 User Client:      https://localhost:${PORT}/packages/user/index.html`);
+  console.log(`   🚨 Responder Client: https://localhost:${PORT}/packages/responder/index.html`);
+  console.log(`   🖥️  Dashboard:        https://localhost:${PORT}/packages/dashboard/login.html`);
 
   // initializeTestData();
   // // Start the simulation loop
