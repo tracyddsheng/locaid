@@ -3,14 +3,16 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="initial-scale=1, maximum-scale=1, user-scalable=no" />
-    <title>ArcGIS Live Dashboard</title>
+    <title>LocAid Dashboard</title>
     <link rel="stylesheet" href="https://js.arcgis.com/4.29/esri/themes/light/main.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600&display=swap" rel="stylesheet">
     <style>
         html, body, #viewDiv {
             padding: 0;
             margin: 0;
             height: 100%;
             width: 100%;
+            font-family: 'Barlow', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         }
         #container {
             display: flex;
@@ -18,10 +20,108 @@
         }
         #sidebar {
             width: 300px;
-            padding: 15px;
+            padding: 0;
             box-sizing: border-box;
-            background: #f8f8f8;
+            background: #ffffff;
             overflow-y: auto;
+            border-right: 1px solid #e0e0e0;
+        }
+        .sidebar-header {
+            background: #990909;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        .sidebar-header img {
+            height: 35px;
+            width: auto;
+            margin-bottom: 5px;
+        }
+        .sidebar-content {
+            padding: 20px;
+        }
+        .sidebar-content h1 {
+            color: #211414;
+            font-weight: 600;
+            font-size: 1.5em;
+            margin-top: 0;
+            margin-bottom: 20px;
+        }
+        .sidebar-content h2 {
+            color: #990909;
+            font-weight: 600;
+            font-size: 1.1em;
+            margin-top: 25px;
+            margin-bottom: 10px;
+            border-bottom: 2px solid #990909;
+            padding-bottom: 5px;
+        }
+        #connection-status {
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-weight: 400;
+            background: #f8f9fa;
+            border: 1px solid #e0e0e0;
+            color: #798491;
+        }
+        #notifyBtn {
+            background-color: #990909;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-family: 'Barlow', sans-serif;
+            font-weight: 600;
+            transition: background-color 0.2s ease;
+        }
+        #notifyBtn:hover:not(:disabled) {
+            background-color: #7a0707;
+        }
+        #notifyBtn:disabled {
+            background-color: #798491;
+            cursor: not-allowed;
+        }
+        #copy-coordinates-btn {
+            background-color: #990909;
+            font-family: 'Barlow', sans-serif;
+            font-weight: 600;
+            transition: background-color 0.2s ease;
+        }
+        #copy-coordinates-btn:hover {
+            background-color: #7a0707;
+        }
+        #live-units-list {
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            background: #f8f9fa;
+        }
+        #live-units-list div {
+            padding: 8px 12px;
+            border-bottom: 1px solid #e0e0e0;
+            font-family: 'Barlow', sans-serif;
+            color: #211414;
+        }
+        #live-units-list div:hover {
+            background-color: rgba(153, 9, 9, 0.1);
+            color: #990909;
+        }
+        #live-units-list div:last-child {
+            border-bottom: none;
+        }
+        #selected-user-panel {
+            border: 2px solid #990909;
+            border-radius: 4px;
+            padding: 15px;
+            background: #ffffff;
+        }
+        #selected-user-panel h2 {
+            margin-top: 0;
+            color: #990909;
+            border-bottom: 1px solid #990909;
+        }
+        #selected-user-info {
+            font-family: 'Barlow', sans-serif;
+            color: #211414;
+            line-height: 1.5;
         }
         #viewDiv {
             flex-grow: 1;
@@ -94,19 +194,23 @@
 <body>
     <div id="container">
         <div id="sidebar">
-            <h1>LocAid Dashboard</h1>
-            <h2>Connection Status</h2>
-            <div id="connection-status">Connecting to relay server...</div>
-            <h2>Layers</h2>
-            <div id="layerlist-container"></div>
-            <h2>Actions</h2>
-            <button id="notifyBtn" style="width: 100%; padding: 10px; font-size: 1em;" disabled>Notify Vulnerable Addresses</button>
-            <h2>Live Units</h2>
-            <div id="live-units-list" style="max-height: 200px; overflow-y: auto;"></div>
-            <div id="selected-user-panel" style="display: none; margin-top: 15px;">
-                <h2>Selected Unit</h2>
-                <div id="selected-user-info"></div>
-                <button id="copy-coordinates-btn" style="width: 100%; padding: 10px; font-size: 1em; margin-top: 10px; background-color: #28a745; color: white; border: none; border-radius: 3px; cursor: pointer;">Copy Coordinates</button>
+            <div class="sidebar-header">
+                <img src="imgs/logo-w.png" alt="LocAid">
+            </div>
+            <div class="sidebar-content">
+                <h2>Connection Status</h2>
+                <div id="connection-status">Connecting to relay server...</div>
+                <h2>Layers</h2>
+                <div id="layerlist-container"></div>
+                <h2>Actions</h2>
+                <button id="notifyBtn" style="width: 100%; padding: 10px; font-size: 1em;" disabled>Notify Vulnerable Addresses</button>
+                <h2>Live Units</h2>
+                <div id="live-units-list" style="max-height: 200px; overflow-y: auto;"></div>
+                <div id="selected-user-panel" style="display: none; margin-top: 15px;">
+                    <h2>Selected Unit</h2>
+                    <div id="selected-user-info"></div>
+                    <button id="copy-coordinates-btn" style="width: 100%; padding: 10px; font-size: 1em; margin-top: 10px; color: white; border: none; border-radius: 3px; cursor: pointer;">Copy Coordinates</button>
+                </div>
             </div>
         </div>
         <div id="viewDiv"></div>
