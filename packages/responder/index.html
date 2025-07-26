@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="styles/Button.css">
     <link rel="stylesheet" href="styles/SearchBar.css">
+    <link rel="stylesheet" href="styles/LayerList.css">
     <!-- Load Calcite components from CDN -->
     <script type="module" src="https://js.arcgis.com/calcite-components/3.2.1/calcite.esm.js"></script>
     <!-- Load the ArcGIS Maps SDK for JavaScript from CDN -->
@@ -67,6 +68,32 @@
             flex: 1;
             position: relative
         }
+
+        .embed-container {
+            position: relative; 
+            height: 100%; 
+            height: 100%;
+            width: 100%;
+            padding: 0;
+            margin: 0;
+        } 
+
+        .embed-container iframe, .embed-container object, 
+        
+        .embed-container iframe {
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%;
+        } 
+        
+        small {
+            position: absolute; 
+            z-index: 40; 
+            bottom: 0; 
+            margin-bottom: -15px;
+        }
     </style>
 </head>
 <body>
@@ -79,13 +106,26 @@
     </header>
 
     <main class="main-content">
-        <div id="viewDiv" class="map-container">
-            <button id="filter-layers-btn" class="button button-filter">Filter Layers</button>
-
+        <div id="survey" class="embed-container">
+            <iframe
+                name="survey123webform" 
+                width="100%" 
+                height="100%" 
+                frameborder="0" 
+                marginheight="0" 
+                marginwidth="0" 
+                title="LocAid User Sign Up" 
+                src="//survey123.arcgis.com/share/81b255986666449cb1734a89d3a76da1" 
+                allow="geolocation https://survey123.arcgis.com; 
+                camera https://survey123.arcgis.com"></iframe>
+        </div>
+        <button id="finishSurvey" onclick="window.location.href='tracker.html'">Finish Survey</button>
+        <!-- <div id="viewDiv" class="map-container">
             <arcgis-map item-id="0d8708f95c71433daa14f4ad6965ff2d">
-                <div id="layer-list" style="display: none;">
-                    <arcgis-layer-list position="top-left"></arcgis-layer-list>
-                </div>
+                <arcgis-layer-list 
+                position="top-left" 
+                show-collapse-button
+                show-heading></arcgis-layer-list>
             </arcgis-map>
 
             <div class="search-bar">
@@ -94,10 +134,20 @@
                     <img class="search-icon" src="src/assets/search.png"></img>
                 </div>
             </div>
-        </div>
+        </div> -->
     </main>
 
     <script>
+        var survey123webform = document.getElementsByName('survey123webform')[0];
+        window.addEventListener("message",e=>{
+            if(e.data){
+                var t=JSON.parse(e.data);
+                ["survey123:webform:formLoaded","survey123:onFormLoaded"].includes(t.event)&&t.contentHeight&&(survey123webform.parentNode.style.height=t.contentHeight+"px")&&(survey123webform.parentNode.style["padding-bottom"]="unset")
+            }
+        });
+    </script>
+
+    <!-- <script>
         document.addEventListener('DOMContentLoaded', function() {
             const filterBtn = document.getElementById('filter-layers-btn');
             const layerList = document.getElementById('layer-list');
@@ -110,11 +160,6 @@
                 }
             });
         });
-        // // Handle filter button click
-        // document.getElementById('filter-layers-btn').addEventListener('click', function() {
-        //     const layerList = document.getElementById('layer-list');
-        //     layerList.style.display = layerList.style.display === 'none' ? 'block' : 'none';
-        // });
-    </script>
+    </script> -->
 </body>
 </html>
