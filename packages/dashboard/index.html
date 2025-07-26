@@ -506,6 +506,25 @@
                     if (notifiedUsers.length > 0) {
                         showNotificationModal(notifiedUsers);
                         updateStatus(`${notifiedUsers.length} vulnerable users notified!`, false);
+
+                        // --- Trigger Emails ---
+                        notifiedUsers.forEach(user => {
+                            const attrs = user.attributes;
+                            const name = `${attrs.first_name || ''} ${attrs.last_name || ''}`.trim();
+                            const email = attrs.email_address;
+
+                            if (email && name) {
+                                fetch('/send-notification', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ email, name })
+                                })
+                                .then(response => response.json())
+                                .then(data => console.log(`Notification email sent for ${name}:`, data.message))
+                                .catch(err => console.error(`Failed to send notification email for ${name}:`, err));
+                            }
+                        });
+
                     } else {
                         updateStatus("No signed-up users are within high fire hazard zones.", false);
                     }
