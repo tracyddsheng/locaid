@@ -17,6 +17,7 @@
   "homepage": "https://github.com/tracyddsheng/locaid#readme",
   "description": "",
   "dependencies": {
+    "@arcgis/map-components": "^4.33.11",
     "dayjs": "^1.11.13"
   }
 }

@@ -1,4 +1,34 @@
-:root {
+/* Include calcite, core API and SDK component CSS */
+@import "https://js.arcgis.com/calcite-components/3.2.1/calcite.css";
+@import "https://js.arcgis.com/4.33/@arcgis/core/assets/esri/themes/light/main.css";
+@import "https://js.arcgis.com/4.33/map-components/main.css";
+
+#root,
+html,
+body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+}
+
+/* Custom heading */
+h1 {
+  font-size: 2.5rem;
+  margin: 0;
+}
+
+a {
+  text-decoration: none;
+  color: #00619b;
+}
+
+
+/* Default styling */
+/* :root {
   font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
@@ -65,4 +95,4 @@ button:focus-visible {
   button {
     background-color: #f9f9f9;
   }
-}
+} */
