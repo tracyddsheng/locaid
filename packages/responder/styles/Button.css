@@ -37,6 +37,16 @@
 }
 
 .button-settings:hover {
-    background-color: #333333;
+    background-color: #798491;
     border-radius: 999px;
 }
+
+/* .button-filter {
+    background-color: rgba(128, 128, 128, 0.3); /* translucent gray */
+    color: #000;
+    position: absolute;
+    bottom: 80px;
+    left: 16px;
+    z-index: 10;
+    border: 1px solid #aaa;
+} */

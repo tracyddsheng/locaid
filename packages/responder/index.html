@@ -5,6 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="styles/Button.css">
     <link rel="stylesheet" href="styles/SearchBar.css">
+    <!-- Load Calcite components from CDN -->
+    <script type="module" src="https://js.arcgis.com/calcite-components/3.2.1/calcite.esm.js"></script>
+    <!-- Load the ArcGIS Maps SDK for JavaScript from CDN -->
+    <link rel="stylesheet" href="https://js.arcgis.com/4.33/esri/themes/light/main.css" />
+    <script src="https://js.arcgis.com/4.33/"></script>
+
+    <!-- Load Map components from CDN-->
+    <script type="module" src="https://js.arcgis.com/4.33/map-components/"></script>
+    
     <title>LocAid Responder</title>
     <style>
         body {
@@ -35,7 +44,6 @@
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            padding: 2rem;
             text-align: center;
         }
 
@@ -50,11 +58,20 @@
             width: 100%;
             max-width: 300px;
         }
+
+        .map-container {
+            width: 100%;
+            height: 100%;
+            padding: 0;
+            margin: 0;
+            flex: 1;
+            position: relative
+        }
     </style>
 </head>
 <body>
-    <header class="header">
-        <img src="/logo.svg" alt="LocAid Logo" class="logo">
+    <header class="header" style="background-color: white;">
+        <img src="src/assets/logo.png" alt="LocAid Logo" class="logo">
         <button class="button" onclick="window.location.href='tracker.html'">
                 Call For Help
             </button>
@@ -62,21 +79,38 @@
     </header>
 
     <main class="main-content">
-        <div class="welcome-text">
-            <h1>Welcome to LocAid</h1>
-            <p>Choose your tracking mode to begin</p>
-        </div>
+        <div id="viewDiv" class="map-container">
+            <arcgis-map item-id="0d8708f95c71433daa14f4ad6965ff2d">
+                <arcgis-layer-list position="top-left"></arcgis-layer-list>
+            </arcgis-map>
 
-        <div class="button-container">
-            <button class="button" onclick="window.location.href='tracker.html?mode=responder'">
-                Enter Responder Mode
+            <button id="filterLayersBtn" class="button-filter" position="top-left" onclick="">
+                Filter Layers
             </button>
+
+            <div class="search-bar">
+                <div class="search-bar-inner">
+                    <input type="search" class="search-input" placeholder="Search location..." />
+                    <img class="search-icon" src="src/assets/search.png"></img>
+                </div>
+            </div>
         </div>
     </main>
 
-    <footer class="footer">
-        <input type="search" class="search-bar" placeholder="Search location...">
-        <span class="search-icon">🔍</span>
-    </footer>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const btn = document.getElementById('filterLayersBtn');
+            const layerList = document.getElementById('layerList');
+
+            btn.addEventListener('click', () => {
+            const isHidden = layerList.hasAttribute('hidden');
+            if (isHidden) {
+                layerList.removeAttribute('hidden');
+            } else {
+                layerList.setAttribute('hidden', '');
+            }
+            });
+        });
+    </script>
 </body>
 </html>
