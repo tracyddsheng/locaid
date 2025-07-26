@@ -5,7 +5,7 @@
     background-color: #990909;
     color: #fff;
     border: none;
-    border-radius: 999px;
+    border-radius: 6px;
     padding: 0.75em 1em;
     font-size: 1rem;
     font-weight: 600;
@@ -33,12 +33,12 @@
     color: #4a4a4a;
     font-size: 1.5rem;
     padding: 8px 12px;
-    border-radius: 999px;
+    border-radius: 6;
 }
 
 .button-settings:hover {
     background-color: #798491;
-    border-radius: 999px;
+    border-radius: 6;
 }
 
 .button-filter {

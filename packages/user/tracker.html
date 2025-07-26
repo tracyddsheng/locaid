@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <link rel="stylesheet" href="styles/Button.css">
+    <link rel="stylesheet" href="styles/Popup.css">
     <title>Location Tracker</title>
     <style>
         body {
@@ -171,10 +172,10 @@
 <body>
     <header class="header" style="background-color: white;">
         <img src="src/assets/logo_red.png" alt="LocAid Logo" class="logo">
-        <button class="button button-alt" onclick="window.location.href='tracker.html'">
+        <button id="assistance" class="button button-alt">
             Request Assistance
         </button>
-        <button class="button" onclick="window.location.href='tracker.html'">
+        <button id="911" class="button">
             Call 911
         </button>
         <button class="button-settings">☰</button>
