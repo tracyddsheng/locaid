@@ -1,6 +1,7 @@
 {
   "name": "locaid",
   "version": "0.0.0",
+  "private": true,
   "workspaces": [
     "packages/*"
   ],
@@ -18,6 +19,10 @@
   "description": "",
   "dependencies": {
     "@arcgis/map-components": "^4.33.11",
-    "dayjs": "^1.11.13"
+    "dayjs": "^1.11.13",
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "selfsigned": "^2.4.1",
+    "ws": "^8.17.0"
   }
 }

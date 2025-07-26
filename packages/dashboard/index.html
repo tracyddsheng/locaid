@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <title>ArcGIS Live Dashboard</title>
+    <link rel="stylesheet" href="https://js.arcgis.com/4.29/esri/themes/light/main.css" />
+    <style>
+        html, body, #viewDiv {
+            padding: 0;
+            margin: 0;
+            height: 100%;
+            width: 100%;
+        }
+        #container {
+            display: flex;
+            height: 100%;
+        }
+        #sidebar {
+            width: 300px;
+            padding: 15px;
+            box-sizing: border-box;
+            background: #f8f8f8;
+            overflow-y: auto;
+        }
+        #viewDiv {
+            flex-grow: 1;
+        }
+        #status {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            display: none;
+            z-index: 2;
+        }
+    </style>
+    <script src="https://js.arcgis.com/4.29/"></script>
+</head>
+<body>
+    <div id="container">
+        <div id="sidebar">
+            <h1>Live Dashboard</h1>
+            <h2>How it Works</h2>
+            <p>This dashboard connects to a relay server to show real-time location data sent from a mobile web client.</p>
+            <p>The mobile client uses the browser's Geolocation API to get its coordinates and sends them via an HTTP POST request to a Node.js server.</p>
+            <p>The Node.js server immediately relays that location data to this page using a WebSocket connection.</p>
+            <p>This page listens for those WebSocket messages and draws a temporary graphic on the map for each unique device. <strong>Note: These points are not saved and will disappear on refresh.</strong></p>
+            <h2>Connection Status</h2>
+            <div id="connection-status">Connecting to relay server...</div>
+        </div>
+        <div id="viewDiv"></div>
+    </div>
+    <div id="status"></div>
+
+    <script>
+        // --- CONFIGURATION ---
+        // Dynamically set the IP for the WebSocket connection
+        const WEBSOCKET_IP = window.location.hostname;
+        const WEBSOCKET_PORT = 3000;
+        // Connect over a SECURE WebSocket connection (wss)
+        const WEBSOCKET_URL = `wss://${WEBSOCKET_IP}:${WEBSOCKET_PORT}`;
+
+        // --- DOM ELEMENTS ---
+        const statusDiv = document.getElementById('status');
+        const connectionStatusDiv = document.getElementById('connection-status');
+
+        require([
+            "esri/Map",
+            "esri/views/MapView",
+            "esri/layers/GraphicsLayer",
+            "esri/Graphic",
+            "esri/geometry/Point", // <-- Import the Point class
+            "esri/geometry/geometryEngine"
+        ], function(Map, MapView, GraphicsLayer, Graphic, Point, geometryEngine) {
+
+            // Use a plain JavaScript Object as a dictionary to track graphics by deviceId.
+            // Each entry will now hold both the point and the accuracy circle.
+            const liveGraphics = {};
+
+            const map = new Map({
+                basemap: "arcgis-topographic"
+            });
+
+            const view = new MapView({
+                container: "viewDiv",
+                map: map,
+                center: [-98.5795, 39.8283],
+                zoom: 4
+            });
+
+            // Create a graphics layer to hold the live points
+            const graphicsLayer = new GraphicsLayer();
+            map.add(graphicsLayer);
+
+            // --- WEBSOCKET CONNECTION ---
+            setupWebSocket();
+
+            function setupWebSocket() {
+                const socket = new WebSocket(WEBSOCKET_URL);
+
+                socket.onopen = () => updateStatus('Connected to relay server.', false, true);
+
+                socket.onmessage = (event) => {
+                    console.log('--- Desktop client received message ---');
+                    console.log('Raw data:', event.data);
+                    const locationData = JSON.parse(event.data);
+                    updateStatus(`Received location from ${locationData.deviceId}`, false);
+                    updateMapGraphic(locationData);
+                };
+
+                socket.onclose = () => {
+                    updateStatus('Disconnected. Retrying...', true);
+                    console.error("WebSocket closed. Is the server running? Retrying...");
+                    setTimeout(setupWebSocket, 3000);
+                };
+
+                socket.onerror = (error) => {
+                    updateStatus('WebSocket error.', true);
+                    console.error('WebSocket Error:', error);
+                    socket.close();
+                };
+            }
+
+            function updateMapGraphic(locationData) {
+                const { latitude, longitude, deviceId, accuracy, type = 'user' } = locationData;
+                
+                const point = new Point({
+                    longitude: longitude,
+                    latitude: latitude
+                });
+
+                const accuracyCircle = geometryEngine.geodesicBuffer(point, accuracy, "meters");
+
+                // Define symbols based on the user type
+                const pointColor = type === 'responder' ? [0, 122, 194] : [226, 119, 40]; // Blue for responders, Orange for users
+                const pointSymbol = {
+                    type: "simple-marker",
+                    size: 6,
+                    color: pointColor,
+                    outline: { width: 1, color: "white" }
+                };
+                const circleSymbol = {
+                    type: "simple-fill",
+                    color: [...pointColor, 0.2], // Use the same base color but with transparency
+                    outline: {
+                        color: [255, 255, 255, 0.5],
+                        width: 1
+                    }
+                };
+                
+                if (liveGraphics[deviceId]) {
+                    const graphics = liveGraphics[deviceId];
+                    graphics.point.geometry = point;
+                    graphics.circle.geometry = accuracyCircle;
+                    graphics.point.symbol = pointSymbol; // Update symbol in case type changes
+                    graphics.circle.symbol = circleSymbol;
+                    graphics.point.attributes.accuracy = accuracy.toFixed(0);
+                } else {
+                    const circleGraphic = new Graphic({
+                        geometry: accuracyCircle,
+                        symbol: circleSymbol
+                    });
+
+                    const pointGraphic = new Graphic({
+                        geometry: point,
+                        symbol: pointSymbol,
+                        attributes: {
+                            deviceId: deviceId,
+                            accuracy: accuracy.toFixed(0),
+                            type: type
+                        },
+                        popupTemplate: {
+                            title: "{type}: {deviceId}",
+                            content: "Reported accuracy: {accuracy} meters."
+                        }
+                    });
+
+                    graphicsLayer.addMany([circleGraphic, pointGraphic]);
+                    
+                    // Store references to both graphics.
+                    liveGraphics[deviceId] = {
+                        point: pointGraphic,
+                        circle: circleGraphic
+                    };
+
+                    // After adding a new device, adjust the map view to show all devices.
+                    if (graphicsLayer.graphics.length > 0) {
+                        view.goTo(graphicsLayer.graphics);
+                    }
+                }
+            }
+
+            function updateStatus(message, isError = false, isConnectionStatus = false) {
+                const targetDiv = isConnectionStatus ? connectionStatusDiv : statusDiv;
+                targetDiv.textContent = message;
+                targetDiv.style.color = isError ? '#d9534f' : '#28a745';
+                
+                if (isConnectionStatus) {
+                    targetDiv.style.fontWeight = 'bold';
+                }
+
+                if (!isConnectionStatus) {
+                    statusDiv.style.display = 'block';
+                    setTimeout(() => { statusDiv.style.display = 'none'; }, 4000);
+                }
+            }
+        });
+    </script>
+</body>
+</html> 
