@@ -13,7 +13,7 @@
         .hidden { display: none; }
         #arrow-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; pointer-events: none; z-index: 10; }
         #arrow { font-size: 100px; text-shadow: 0 0 10px rgba(0,0,0,0.5); transition: transform 0.2s ease-out; }
-        .button-group { position: absolute; top: 4px; right: 4px; }
+        .button-group { position: absolute; top: 8px; right: 8px; }
     </style>
 
     <link rel="stylesheet" href="styles/SearchBar.css">
@@ -84,6 +84,10 @@
             margin: 0;
             flex: 1;    
         }
+
+        #filter-layers-btn {
+            background-color: #42454A;
+        }
     </style>
 </head>
 <body>
@@ -97,13 +101,8 @@
 
     <div class="content-contatiner">
         <div id="viewDiv" class="map-container">
-            <button id="filter-layers-btn" class="button button-filter">Filter Layers</button>
 
-            <arcgis-map item-id="0d8708f95c71433daa14f4ad6965ff2d">
-                <div id="layer-list" collapsed="true">
-                    <arcgis-layer-list position="top-left"></arcgis-layer-list>
-                </div>
-            </arcgis-map>
+        <div id="viewDiv"></div>
 
             <div class="search-bar">
                 <div class="search-bar-inner">
@@ -115,7 +114,8 @@
 
         <div class="button-group">
             <!-- <div id="status">Status: Idle</div> -->
-            <button id="startBtn" class="button">Share my location</button>
+            <button id="filter-layers-btn" class="button">Filter Layers</button>
+            <!-- <button id="startBtn" class="button">Share my location</button> -->
             <!-- <button id="responderBtn" class="button">Responder Mode</button>
             <button id="stopBtn" class="button hidden">Stop Tracking</button> -->
         </div>
@@ -125,7 +125,8 @@
         <div id="arrow">⬆️</div>
     </div> -->
 
-    <script>
+</body>
+<script defer>
         // --- CONFIGURATION ---
         const SERVER_URL = `/location`;
         const SEND_INTERVAL_MS = 3000;
@@ -160,8 +161,8 @@
 
         function updateStatus(message, isError = false) {
             console.log(message);
-            statusDiv.textContent = `Status: ${message}`;
-            statusDiv.style.color = isError ? '#ff3b30' : '#333';
+            // statusDiv.textContent = `Status: ${message}`;
+            // statusDiv.style.color = isError ? '#ff3b30' : '#333';    
         }
 
         async function sendLocation(position) {
@@ -221,9 +222,9 @@
                 arrowContainer.classList.remove('hidden');
             }
 
-            startBtn.classList.add('hidden');
-            responderBtn.classList.add('hidden');
-            stopBtn.classList.remove('hidden');
+            // startBtn.classList.add('hidden');
+            // responderBtn.classList.add('hidden');
+            // stopBtn.classList.remove('hidden');
         }
 
         function stopTracking() {
@@ -333,23 +334,141 @@
             }
         }
 
+        startTracking(false);
+
+//         document.addEventListener('DOMContentLoaded', () => {
+// startBtn.addEventListener('click', () => startTracking(false));
+//         responderBtn.addEventListener('click', () => startTracking(true));
+//         stopBtn.addEventListener('click', stopTracking);
+//         });
         // --- EVENT LISTENERS ---
-        startBtn.addEventListener('click', () => startTracking(false));
-        responderBtn.addEventListener('click', () => startTracking(true));
-        stopBtn.addEventListener('click', stopTracking);
-
-        document.addEventListener('DOMContentLoaded', function() {
-            const filterBtn = document.getElementById('filter-layers-btn');
-            const layerList = document.getElementById('layer-list');
-
-            filterBtn.addEventListener('click', function() {
-                if (layerList.style.display === 'none') {
-                    layerList.style.display = 'block'; // Or 'flex', 'grid', etc.
-                } else {
-                    layerList.style.display = 'none';
-                }
-            });
-        });
+        
     </script>
-</body>
+
+    <script type="module" defer>
+      const [Map, WebMap, LayerList, MapView, FeatureLayer, GeoJSONLayer, GraphicsLayer, RouteLayer, Stop, PolygonBarrier, PolylineBarrier,Locate, Graphic] = await $arcgis.import([
+        "@arcgis/core/Map.js",
+        "@arcgis/core/WebMap.js",
+        "@arcgis/core/widgets/LayerList.js",
+        "@arcgis/core/views/MapView.js",
+        "@arcgis/core/layers/FeatureLayer.js",
+        "@arcgis/core/layers/GeoJSONLayer.js",
+        "@arcgis/core/layers/GraphicsLayer.js",
+          "@arcgis/core/layers/RouteLayer.js",
+          "@arcgis/core/rest/support/Stop.js",
+          "@arcgis/core/rest/support/PolygonBarrier.js",
+          "@arcgis/core/rest/support/PolylineBarrier.js",
+          "@arcgis/core/widgets/Locate.js",
+          "@arcgis/core/Graphic.js",
+      ]);
+
+    //   const map = new Map({
+    //     basemap: "topo-vector",
+    //   });
+
+      const map = new WebMap({
+        portalItem: {
+          id: "0d8708f95c71433daa14f4ad6965ff2d",
+        },
+      });
+
+
+      const graphicsLayer = new GraphicsLayer();
+        map.add(graphicsLayer);
+        let userGraphic = null;
+
+        if ("geolocation" in navigator) {
+    navigator.geolocation.watchPosition(
+      function (position) {
+        const { latitude, longitude } = position.coords;
+
+        if (!userGraphic) {
+          userGraphic = new Graphic({
+            geometry: {
+              type: "point",
+              latitude,
+              longitude
+            },
+            symbol: {
+              type: "simple-marker",
+              color: "blue",
+              size: "12px",
+              outline: {
+                color: "white",
+                width: 1
+              }
+            }
+          });
+          graphicsLayer.add(userGraphic);
+        } else {
+          userGraphic.geometry = { type: "point", latitude, longitude };
+        }})}
+
+
+      const view = new MapView({
+        container: "viewDiv",
+        map: map,
+
+        extent: {
+          xmin: -118.23849978435393,
+          ymin: 34.13414868681906,
+          xmax: -118.00438397317032,
+          ymax: 34.25355759833813,
+          spatialReference: 4326,
+        }
+      });
+
+        const layerList = new LayerList({
+            view: view
+        });
+
+        let isLayerListVisible = true;
+
+        const filterBtn = document.getElementById('filter-layers-btn');
+
+        filterBtn.addEventListener('click', function() {
+            if (isLayerListVisible)
+                view.ui.remove(layerList);
+
+            else
+                view.ui.add(layerList, {
+                    position: "top-right"
+                });
+
+            isLayerListVisible = !isLayerListVisible
+        })
+
+        if ("geolocation" in navigator) {
+            navigator.geolocation.getCurrentPosition(
+                function (position) {
+                const latitude = position.coords.latitude;
+                const longitude = position.coords.longitude;
+
+                console.log(latitude, longitude)
+                drawRoute({x: longitude, y: latitude, name: "My Location"}, {x: -117.89101260860105, y: 34.14678578730155, name: "Los Angeles County Fire Dept. Station 97"})
+                }
+            )
+        }
+
+        async function drawRoute(from, to) {
+            const stops = [
+                new Stop({
+                geometry: { x: from.x, y: from.y },
+                name: from.name,
+                }),
+                new Stop({
+                geometry: { x: to.x, y: to.y },
+                name: to.name,
+                }),
+            ];
+                const routeLayer = new RouteLayer({
+                stops,
+            });
+
+                map.add(routeLayer)
+
+                const results = await routeLayer.solve({ apiKey: "AAPTxy8BH1VEsoebNVZXo8HurJNkc1laRp1vAwT3-tXnuF3x-hGfL7b7jMe3CM0GiMyuTTg-lrFRdjvrAWsq9NCjJTcBWf_1bK0AoEE-eukjSiR7_41IaU8ZbnZytMHzhJvd87ZnvexVuj65yOBoclKr2N3ciauOPysAhdUze5Xm2KImfnxpA2Tnh9ANk5OTLlVMowDfQQ6RT5TIcg7um6QJUQi8VHORtLw0-sg5yUsCrVb1Hnp4zkT4zV-ZxpYG0_HAAT1_teoS1mtm" });
+                routeLayer.update(results);
+        }
+    </script>
 </html>
