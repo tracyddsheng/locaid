@@ -637,8 +637,13 @@
     const searchInput = document.querySelector(".search-input");
 
     searchInput.addEventListener("keydown", async () => {
-        if (event.key === "Enter") {
-            const value = searchInput.value.toLowerCase();
+        if (event.key === "Enter") searchKeyword()
+    });
+    
+    document.getElementById("search-icon-wrapper").addEventListener("click", () => searchKeyword())
+
+    function searchKeyword() {
+        const value = searchInput.value.toLowerCase();
 
             let searchedLayer;
 
@@ -657,9 +662,7 @@
             }
             else
                 return;
-
-        }
-    });
+    }
 
     async function fillerUpSearchResult(searchedLayer, property1, property2) {
         destination.innerHTML = "";

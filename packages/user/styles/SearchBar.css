@@ -39,7 +39,6 @@
     top: 50%;
     transform: translateY(-50%);
     color: #798491;
-    pointer-events: none;
     width: 40px;
     height: 40px;
 }
