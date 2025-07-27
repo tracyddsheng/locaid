@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <link rel="stylesheet" href="styles/Button.css">
+    <link rel="stylesheet" href="https://js.arcgis.com/4.29/esri/themes/light/main.css" />
     <title>Location Tracker</title>
     <style>
         body {
@@ -51,10 +52,11 @@
 
         #arrow-container {
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 120px;
+            height: 120px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -63,9 +65,10 @@
         }
 
         #arrow {
-            font-size: 100px;
-            text-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+            width: 80px;
+            height: 80px;
             transition: transform 0.2s ease-out;
+            filter: drop-shadow(0 0 10px rgba(153, 9, 9, 0.5));
         }
 
         .button-group {
@@ -79,14 +82,7 @@
 
     <title>Location Tracker</title>
 
-    <!-- Load Calcite components from CDN -->
-    <script type="module" src="https://js.arcgis.com/calcite-components/3.2.1/calcite.esm.js"></script>
-    <!-- Load the ArcGIS Maps SDK for JavaScript from CDN -->
-    <link rel="stylesheet" href="https://js.arcgis.com/4.33/esri/themes/light/main.css" />
-    <script src="https://js.arcgis.com/4.33/"></script>
 
-    <!-- Load Map components from CDN-->
-    <script type="module" src="https://js.arcgis.com/4.33/map-components/"></script>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -108,7 +104,7 @@
         }
 
         .logo {
-            height: 40px;
+            height: 50px;
         }
 
         .main-content {
@@ -148,6 +144,11 @@
             flex: 1;
         }
 
+        #viewDiv {
+            width: 100%;
+            height: 100%;
+        }
+
         #filter-layers-btn {
             background-color: #42454A;
         }
@@ -160,47 +161,54 @@
             transform: translate(-50%, -50%);
             background-color: white;
             border: solid 1px black;
-
             border-radius: 5px;
-
             padding: 10px;
+            cursor: pointer;
+            z-index: 1000;
         }
+
         #list-destination {
             max-height: 200px;
-
             background-color: white;
-
             padding: 12px 12px;
             margin-bottom: 8px;
             border-radius: 8px;
-
             display: none;
             overflow-y: auto;
+            z-index: 1000;
+        }
+
+        .destination-item {
+            padding: 8px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .destination-item:hover {
+            background-color: #f0f0f0;
+        }
+
+        .destination-item:last-child {
+            border-bottom: none;
         }
     </style>
 </head>
 
 <body>
     <header class="header" style="background-color: white;">
-        <img src="src/assets/logo.png" alt="LocAid Logo" class="logo">
-        <button class="button" onclick="window.location.href='tracker.html'">
-            Call 911
-        </button>
+        <img src="src/assets/logo_red.png" alt="LocAid Logo" class="logo">
+        <button id="toggle-arrow-btn" class="button hidden" style="background-color: #990909;">Show Arrow</button>
         <button class="button-settings">☰</button>
     </header>
 
     <div class="content-contatiner">
         <div id="viewDiv" class="map-container">
 
-            <div id="viewDiv"></div>
-
-
             <div class="search-bar">
-                <div id="list-destination">
-
-                </div>
+                <div id="list-destination"></div>
                 <div class="search-bar-inner">
-                    <input type="search" class="search-input" placeholder="Search location..." />
+                    <input type="search" class="search-input" placeholder="Search fire stations or users..." />
                     <div class="search-icon-wrapper" id="search-icon-wrapper">
                         <img class="search-icon" src="src/assets/search.png" />
                     </div>
@@ -213,17 +221,20 @@
         <div class="button-group">
             <!-- <div id="status">Status: Idle</div> -->
             <button id="filter-layers-btn" class="button">Filter Layers</button>
+            <!-- <button id="test-compass-btn" class="button hidden" style="background-color: #34c759;">Test Compass</button> -->
+           <!-- <button id="calibrate-compass-btn" class="button hidden" style="background-color: #ff9500;">Set North</button> -->
             <!-- <button id="startBtn" class="button">Share my location</button> -->
             <!-- <button id="responderBtn" class="button">Responder Mode</button>
             <button id="stopBtn" class="button hidden">Stop Tracking</button> -->
         </div>
-        </main>
+    </main>    
 
-        <!-- <div id="arrow-container" class="hidden">
-        <div id="arrow">⬆️</div>
-    </div> -->
+    <div id="arrow-container" class="hidden">
+        <img id="arrow" src="src/assets/arrow.png" alt="Direction Arrow">
+    </div>
 
 </body>
+<script src="https://js.arcgis.com/4.29/"></script>
 <script defer>
     // --- CONFIGURATION ---
     const SERVER_URL = `/location`;
@@ -236,24 +247,36 @@
     const statusDiv = document.getElementById('status');
     const arrowContainer = document.getElementById('arrow-container');
     const arrow = document.getElementById('arrow');
+    const toggleArrowBtn = document.getElementById('toggle-arrow-btn');
+    const testCompassBtn = document.getElementById('test-compass-btn');
+    const calibrateCompassBtn = document.getElementById('calibrate-compass-btn');
+
+    // --- CHECK URL PARAMETERS ---
+    const urlParams = new URLSearchParams(window.location.search);
+    const responderModeFromURL = urlParams.get('mode') === 'responder';
 
     // --- STATE ---
     let watchId = null;
     let deviceId = getOrSetDeviceId(); // Use a stable, persistent Device ID
-    let isResponder = false;
+    let isResponder = responderModeFromURL; // Start as responder if URL parameter is set
     let socket = null;
     let users = {}; // Store locations of other users
     let latestHeading = 0; // Store the compass heading
+    let arrowVisible = false; // Track arrow visibility state
+    let compassSetup = false; // Track if compass has been set up
+    let userGraphics = {}; // Store user graphics by deviceId
 
     // --- FUNCTIONS ---
     function getOrSetDeviceId() {
-        const storedId = localStorage.getItem('trackerDeviceId');
+        const storageKey = responderModeFromURL ? 'responderDeviceId' : 'trackerDeviceId';
+        const storedId = localStorage.getItem(storageKey);
         if (storedId) {
             return storedId;
         }
         // Create a new ID if one isn't stored
-        const newId = `device-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
-        localStorage.setItem('trackerDeviceId', newId);
+        const prefix = responderModeFromURL ? 'responder' : 'user';
+        const newId = `${prefix}_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+        localStorage.setItem(storageKey, newId);
         return newId;
     }
 
@@ -274,6 +297,8 @@
             type: isResponder ? 'responder' : 'user'
         };
 
+
+
         try {
             const response = await fetch(SERVER_URL, {
                 method: 'POST',
@@ -292,6 +317,7 @@
             return;
         }
         isResponder = responderMode;
+        console.log('📍 Starting tracking - isResponder:', isResponder, 'responderMode:', responderMode);
         updateStatus('Starting tracker... Waiting for position.');
 
         watchId = navigator.geolocation.watchPosition(
@@ -301,6 +327,8 @@
                 window.latestPosition = position;
                 if (isResponder) {
                     findNearestUserAndPoint();
+                    // Update responder's own location on map
+                    updateResponderOnMap(position);
                 }
             },
             (error) => { updateStatus(`Geolocation error: ${error.message}`, true); },
@@ -314,10 +342,11 @@
         }, SEND_INTERVAL_MS);
 
         if (isResponder) {
-            // Request compass permissions and set up listeners
-            setupDeviceOrientation();
             setupWebSocket();
-            arrowContainer.classList.remove('hidden');
+            // Show the responder buttons
+            toggleArrowBtn.classList.remove('hidden');
+            if (testCompassBtn) testCompassBtn.classList.remove('hidden');
+            if (calibrateCompassBtn) calibrateCompassBtn.classList.remove('hidden');
         }
 
         // startBtn.classList.add('hidden');
@@ -335,11 +364,16 @@
         watchId = null;
         isResponder = false;
         window.latestPosition = null;
+        arrowVisible = false;
+        compassSetup = false;
 
-        startBtn.classList.remove('hidden');
-        responderBtn.classList.remove('hidden');
-        stopBtn.classList.add('hidden');
+        // Reset UI elements
         arrowContainer.classList.add('hidden');
+        toggleArrowBtn.classList.add('hidden');
+        toggleArrowBtn.textContent = 'Show Arrow';
+        toggleArrowBtn.style.backgroundColor = '#990909';
+        if (testCompassBtn) testCompassBtn.classList.add('hidden');
+        if (calibrateCompassBtn) calibrateCompassBtn.classList.add('hidden');
         updateStatus('Tracking stopped.');
     }
 
@@ -353,6 +387,8 @@
             if (locationData.deviceId !== deviceId && locationData.type === 'user') {
                 users[locationData.deviceId] = locationData;
                 findNearestUserAndPoint();
+                // Update user on map if map is available
+                updateUserOnMap(locationData);
             }
         };
 
@@ -364,37 +400,215 @@
 
     // --- New Compass/Orientation Functions ---
     function setupDeviceOrientation() {
-        // Check for the iOS 13+ permission model
-        if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-            DeviceOrientationEvent.requestPermission()
-                .then(permissionState => {
-                    if (permissionState === 'granted') {
-                        window.addEventListener('deviceorientation', handleOrientation);
-                    } else {
-                        updateStatus('Compass permission was not granted.', true);
+        console.log('🧭 Setting up device orientation with user gesture...');
+        
+        return new Promise((resolve, reject) => {
+            // Check for the iOS 13+ permission model
+            if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                console.log('🧭 iOS 13+ detected, requesting permission...');
+                DeviceOrientationEvent.requestPermission()
+                    .then(permissionState => {
+                        console.log('🧭 Permission result:', permissionState);
+                        if (permissionState === 'granted') {
+                            window.addEventListener('deviceorientation', handleOrientation);
+                            console.log('🧭 Device orientation listener added for iOS');
+                            compassSetup = true;
+                            
+                            // Test compass after setup
+                            setTimeout(() => {
+                                console.log('🧭 After 2 seconds, latest heading:', latestHeading);
+                                resolve();
+                            }, 2000);
+                        } else {
+                            reject(new Error('Compass permission denied'));
+                        }
+                    })
+                    .catch(error => {
+                        console.error('🧭 Permission error:', error);
+                        reject(error);
+                    });
+            } else {
+                // Handle non-iOS 13+ devices (Android, older iOS)
+                console.log('🧭 Non-iOS 13+ device, adding orientation listener...');
+                window.addEventListener('deviceorientation', handleOrientation);
+                
+                // Also try absolute orientation for better compass on Android
+                if ('DeviceOrientationEvent' in window && 'ondeviceorientationabsolute' in window) {
+                    console.log('🧭 Adding absolute orientation listener for Android...');
+                    window.addEventListener('deviceorientationabsolute', handleOrientation);
+                }
+                
+                compassSetup = true;
+                
+                // Test compass after setup
+                setTimeout(() => {
+                    console.log('🧭 After 2 seconds, latest heading:', latestHeading);
+                    if (latestHeading === 0) {
+                        console.log('🧭 WARNING: Compass may not be working - still showing 0°');
                     }
-                })
-                .catch(error => {
-                    updateStatus('Error requesting compass permission.', true)
-                    console.error(error);
-                });
-        } else {
-            // Handle non-iOS 13+ devices
-            window.addEventListener('deviceorientation', handleOrientation);
-        }
+                    resolve();
+                }, 2000);
+            }
+        });
     }
 
     function handleOrientation(event) {
         // Use webkitCompassHeading if available (for iOS), otherwise use alpha
         let heading = event.alpha;
         if (typeof event.webkitCompassHeading !== "undefined") {
-            heading = event.webkitCompassHeading;
+            heading = event.webkitCompassHeading; 
         }
+        
+        // Handle null/undefined values
+        if (heading === null || heading === undefined) {
+            heading = 0;
+        }
+        
         latestHeading = heading;
+        
+        // Debug: Show compass values on screen
+        if (isResponder && arrowVisible) {
+            console.log('🧭 Compass - Alpha:', event.alpha, 'WebKit:', event.webkitCompassHeading, 'Using:', heading);
+        }
+    }
+
+    function toggleArrow() {
+        console.log('🎯 Toggle arrow clicked! Current state:', { arrowVisible, compassSetup, isResponder });
+        
+        if (!arrowVisible) {
+            // Showing arrow - request compass permission first
+            if (!compassSetup) {
+                console.log('🧭 Requesting compass access with user gesture...');
+                setupDeviceOrientation().then(() => {
+                    // Permission granted, show arrow
+                    arrowVisible = true;
+                    arrowContainer.classList.remove('hidden');
+                    toggleArrowBtn.textContent = 'Hide Arrow';
+                    toggleArrowBtn.style.backgroundColor = '#7a0707';
+                    findNearestUserAndPoint();
+                }).catch(error => {
+                    console.error('🧭 Failed to setup compass:', error);
+                    updateStatus('Compass permission denied. Arrow will point assuming north is up.', true);
+                    // Show arrow anyway, but it won't rotate with compass
+                    arrowVisible = true;
+                    arrowContainer.classList.remove('hidden');
+                    toggleArrowBtn.textContent = 'Hide Arrow';
+                    toggleArrowBtn.style.backgroundColor = '#7a0707';
+                    findNearestUserAndPoint();
+                });
+            } else {
+                // Compass already set up, just show arrow
+                arrowVisible = true;
+                arrowContainer.classList.remove('hidden');
+                toggleArrowBtn.textContent = 'Hide Arrow';
+                toggleArrowBtn.style.backgroundColor = '#7a0707';
+                findNearestUserAndPoint();
+            }
+        } else {
+            // Hiding arrow
+            arrowVisible = false;
+            arrowContainer.classList.add('hidden');
+            toggleArrowBtn.textContent = 'Show Arrow';
+            toggleArrowBtn.style.backgroundColor = '#990909';
+        }
+    }
+
+    function testCompass() {
+        alert(`Current compass reading:\n\nHeading: ${latestHeading}°\n\nRotate your phone and try again to see if the value changes.\n\nIf it stays at 0°, the compass isn't working.`);
+    }
+
+    function calibrateCompass() {
+        if (!compassSetup) {
+            alert('Please click "Show Arrow" first to request compass permission.');
+            return;
+        }
+        
+        alert(`Point your phone towards NORTH and click OK.\n\nCurrent reading: ${latestHeading}°\n\nThis will calibrate the arrow direction.`);
+        
+        // For now, just show current reading - we can add manual offset later if needed
+        console.log('🧭 Manual calibration - current heading:', latestHeading);
+    }
+
+    function updateUserOnMap(userData) {
+        // Only update map if we're in responder mode and have map objects available
+        if (!isResponder || typeof window.Graphic === 'undefined' || typeof window.Point === 'undefined') {
+            return;
+        }
+
+        try {
+            const { latitude, longitude, deviceId: userDeviceId, accuracy } = userData;
+            
+            if (userGraphics[userDeviceId]) {
+                // Update existing user graphic
+                userGraphics[userDeviceId].geometry = new window.Point({ latitude, longitude });
+            } else if (window.graphicsLayer) {
+                // Create new user graphic
+                const userGraphic = new window.Graphic({
+                    geometry: new window.Point({ latitude, longitude }),
+                    symbol: {
+                        type: "simple-marker",
+                        color: [226, 119, 40], // Orange for users
+                        size: "14px",
+                        outline: { color: "white", width: 2 }
+                    },
+                    attributes: { 
+                        type: "user", 
+                        deviceId: userDeviceId,
+                        accuracy: accuracy 
+                    },
+                    popupTemplate: {
+                        title: "User: {deviceId}",
+                        content: "Accuracy: {accuracy}m"
+                    }
+                });
+                
+                window.graphicsLayer.add(userGraphic);
+                userGraphics[userDeviceId] = userGraphic;
+                console.log('🗺️ Added user to map:', userDeviceId);
+            }
+        } catch (error) {
+            console.log('🗺️ Map not ready yet for user updates:', error);
+        }
+    }
+
+    function updateResponderOnMap(position) {
+        // Only update map if we're in responder mode and have map objects available
+        if (!isResponder || typeof window.Graphic === 'undefined' || typeof window.Point === 'undefined') {
+            return;
+        }
+
+        try {
+            const { latitude, longitude, accuracy } = position.coords;
+            
+            if (window.userGraphic) {
+                // Update existing responder graphic
+                window.userGraphic.geometry = new window.Point({ latitude, longitude });
+            } else if (window.graphicsLayer) {
+                // Create new responder graphic
+                window.userGraphic = new window.Graphic({
+                    geometry: new window.Point({ latitude, longitude }),
+                    symbol: {
+                        type: "simple-marker",
+                        color: [0, 122, 194], // Blue for responder
+                        size: "16px",
+                        outline: { color: "white", width: 2 }
+                    },
+                    attributes: { 
+                        type: "responder", 
+                        deviceId: deviceId,
+                        accuracy: accuracy 
+                    }
+                });
+                window.graphicsLayer.add(window.userGraphic);
+                console.log('🗺️ Created responder graphic on map');
+            }
+        } catch (error) {
+            console.log('🗺️ Map not ready yet for responder updates:', error);
+        }
     }
 
     function findNearestUserAndPoint() {
-        if (!window.latestPosition || Object.keys(users).length === 0) {
+        if (!arrowVisible || !window.latestPosition || Object.keys(users).length === 0) {
             arrow.style.transform = 'rotate(0deg) scale(0)';
             return;
         }
@@ -418,21 +632,30 @@
             const lon1 = myLon * Math.PI / 180;
             const lat2 = nearestUser.latitude * Math.PI / 180;
             const lon2 = nearestUser.longitude * Math.PI / 180;
-
+            
             const y = Math.sin(lon2 - lon1) * Math.cos(lat2);
             const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(lon2 - lon1);
             const bearing = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360; // Corrected bearing calculation
 
             // Apply the device's compass heading to orient the arrow correctly
-            const rotation = bearing - latestHeading;
+            // Add 180° because the arrow image points down instead of up
+            const rotation = bearing - latestHeading + 180;
+            console.log('🎯 Arrow calc - Bearing:', bearing.toFixed(1), '° | Compass:', latestHeading, '° | Final rotation:', rotation.toFixed(1), '°');
             arrow.style.transform = `rotate(${rotation}deg) scale(1)`;
 
         } else {
-            arrow.style.transform = 'rotate(0deg) scale(0)';
+             arrow.style.transform = 'rotate(0deg) scale(0)';
         }
     }
 
-    startTracking(false);
+    // Auto-start tracking in the appropriate mode
+    console.log('🚀 Starting tracker with:', { responderModeFromURL, deviceId });
+    startTracking(responderModeFromURL);
+
+    // Add event listener for responder buttons
+    toggleArrowBtn.addEventListener('click', toggleArrow);
+    if (testCompassBtn) testCompassBtn.addEventListener('click', testCompass);
+    if (calibrateCompassBtn) calibrateCompassBtn.addEventListener('click', calibrateCompass);
 
     //         document.addEventListener('DOMContentLoaded', () => {
     // startBtn.addEventListener('click', () => startTracking(false));
@@ -443,240 +666,409 @@
 
 </script>
 
-<script type="module" defer>
-    const [Map, WebMap, LayerList, MapView, FeatureLayer, GeoJSONLayer, GraphicsLayer, RouteLayer, Stop, PolygonBarrier, PolylineBarrier, Locate, Graphic, projection, SpatialReference, Point, geometryEngine] = await $arcgis.import([
-        "@arcgis/core/Map.js",
-        "@arcgis/core/WebMap.js",
-        "@arcgis/core/widgets/LayerList.js",
-        "@arcgis/core/views/MapView.js",
-        "@arcgis/core/layers/FeatureLayer.js",
-        "@arcgis/core/layers/GeoJSONLayer.js",
-        "@arcgis/core/layers/GraphicsLayer.js",
-        "@arcgis/core/layers/RouteLayer.js",
-        "@arcgis/core/rest/support/Stop.js",
-        "@arcgis/core/rest/support/PolygonBarrier.js",
-        "@arcgis/core/rest/support/PolylineBarrier.js",
-        "@arcgis/core/widgets/Locate.js",
-        "@arcgis/core/Graphic.js",
-        "@arcgis/core/geometry/projection.js",
-        "@arcgis/core/geometry/SpatialReference.js",
-        "esri/geometry/Point",
-        "@arcgis/core/geometry/geometryEngine.js",
-    ]);
+<script>
+    // Initialize map only in responder mode
+    if (responderModeFromURL) {
+        console.log('🗺️ Responder mode detected, initializing map...');
+        require([
+            "esri/config",
+            "esri/WebMap",
+            "esri/views/MapView",
+            "esri/layers/GraphicsLayer",
+            "esri/Graphic",
+            "esri/geometry/Point",
+            "esri/widgets/LayerList"
+                ], function(esriConfig, WebMap, MapView, GraphicsLayer, Graphic, Point, LayerList) {
+            // Also load routing modules
+            require([
+                "esri/layers/RouteLayer",
+                "esri/rest/support/Stop",
+                "esri/geometry/projection",
+                "esri/geometry/SpatialReference"
+            ], function(RouteLayer, Stop, projection, SpatialReference) {
+                
+                try {
+                    // Set API key
+                    esriConfig.apiKey = "AAPTxy8BH1VEsoebNVZXo8HurJNkc1laRp1vAwT3-tXnuF3x-hGfL7b7jMe3CM0GiMyuTTg-lrFRdjvrAWsq9NCjJTcBWf_1bK0AoEE-eukjSiR7_41IaU8ZbnZytMHzhJvd87ZnvexVuj65yOBoclKr2N3ciauOPysAhdUze5Xm2KImfnxpA2Tnh9ANk5OTLlVMowDfQQ6RT5TIcg7um6QJUQi8VHORtLw0-sg5yUsCrVb1Hnp4zkT4zV-ZxpYG0_HAAT1_teoS1mtm";
+                    
+                    console.log('🗺️ Starting map initialization for responder...');
 
-    //   const map = new Map({
-    //     basemap: "topo-vector",
-    //   });
-
-    const map = new WebMap({
-        portalItem: {
-            id: "0d8708f95c71433daa14f4ad6965ff2d",
-        },
-    });
-
-
-    const graphicsLayer = new GraphicsLayer();
-    map.add(graphicsLayer);
-    let userGraphic = null;
-
-    if ("geolocation" in navigator) {
-        navigator.geolocation.watchPosition(
-            function (position) {
-                const { latitude, longitude } = position.coords;
-
-                if (!userGraphic) {
-                    userGraphic = new Graphic({
-                        geometry: {
-                            type: "point",
-                            latitude,
-                            longitude
-                        },
-                        symbol: {
-                            type: "simple-marker",
-                            color: "blue",
-                            size: "12px",
-                            outline: {
-                                color: "white",
-                                width: 1
-                            }
-                        }
-                    });
-                    graphicsLayer.add(userGraphic);
-                } else {
-                    userGraphic.geometry = { type: "point", latitude, longitude };
-                }
-            })
-    }
-
-    const view = new MapView({
-        container: "viewDiv",
-        map: map,
-
-        extent: {
-            xmin: -118.23849978435393,
-            ymin: 34.13414868681906,
-            xmax: -118.00438397317032,
-            ymax: 34.25355759833813,
-            spatialReference: 4326,
-        }
-    });
-
-    const layerList = new LayerList({
-        view: view
-    });
-
-    let isLayerListVisible = true;
-
-    const filterBtn = document.getElementById('filter-layers-btn');
-
-    filterBtn.addEventListener('click', function () {
-        if (isLayerListVisible)
-            view.ui.remove(layerList);
-
-        else
-            view.ui.add(layerList, {
-                position: "top-right"
-            });
-
-        isLayerListVisible = !isLayerListVisible
-    })
-
-    let currentLocation;
-
-    if ("geolocation" in navigator) {
-        navigator.geolocation.getCurrentPosition(
-            function (position) {
-                const latitude = position.coords.latitude;
-                const longitude = position.coords.longitude;
-
-                console.log(latitude, longitude)
-                currentLocation = { x: longitude, y: latitude }
-
-                view.goTo({
-                center: [longitude, latitude],
-                zoom: 15
-                });
-            }
-        )
-    }
-
-    async function drawRoute(from, to) {
-        const stops = [
-            new Stop({
-                geometry: { x: from.x, y: from.y },
-                name: from.name,
-            }),
-            new Stop({
-                geometry: { x: to.x, y: to.y },
-                name: to.name,
-            }),
-        ];
-        const routeLayer = new RouteLayer({
-            stops,
-        });
-
-        map.add(routeLayer)
-
-        const results = await routeLayer.solve({ apiKey: "AAPTxy8BH1VEsoebNVZXo8HurJNkc1laRp1vAwT3-tXnuF3x-hGfL7b7jMe3CM0GiMyuTTg-lrFRdjvrAWsq9NCjJTcBWf_1bK0AoEE-eukjSiR7_41IaU8ZbnZytMHzhJvd87ZnvexVuj65yOBoclKr2N3ciauOPysAhdUze5Xm2KImfnxpA2Tnh9ANk5OTLlVMowDfQQ6RT5TIcg7um6QJUQi8VHORtLw0-sg5yUsCrVb1Hnp4zkT4zV-ZxpYG0_HAAT1_teoS1mtm" });
-        routeLayer.update(results);
-
-        view.goTo(routeLayer.routeInfo.geometry);
-    }
-
-    const goToButton = document.getElementById("route-to-button")
-
-    view.on("click", function (event) {
-        view.hitTest(event).then(function (response) {
-            const fireStaions = response.results.filter(r => r.graphic.layer && r.graphic.layer.title === "Fire Stations")
-            console.log(fireStaions)
-
-            if (fireStaions.length > 0) {
-                goToButton.style.display = "block"
-            } else {
-                goToButton.style.display = "none"
-            }
-
-            goToButton.addEventListener("click", () => {
-                drawRoute({ x: currentLocation.x, y: currentLocation.y, name: "My Location" }, { x: fireStaions[0].mapPoint.longitude, y: fireStaions[0].mapPoint.latitude, name: "Los Angeles County Fire Dept. Station 97" })
-
-                goToButton.style.display = "none"
-            })
-        })
-    })
-
-    console.log(document.getElementById("search-icon-wrapper"))
-
-    const destination = document.querySelector("#list-destination");
-
-    document.querySelector(".search-input").addEventListener("keydown", async () => {
-        if (event.key === "Enter") {
-            const fireStationsLayer = view.map.allLayers.find(layer => layer.title === "Fire Stations");
-
-        await projection.load();
-
-        if (fireStationsLayer && fireStationsLayer.type === "feature") {
-            
-            const query = fireStationsLayer.createQuery();
-            query.where = "1=1"; // all features
-            query.outFields = ["*"];
-            query.returnGeometry = true;
-
-            fireStationsLayer.queryFeatures(query).then(result => {
-                const wgs84 = SpatialReference.WGS84;
-
-                const coords = result.features.map((f) => {
-                    const pt = projection.project(f.geometry, wgs84);
-                    return {
-                        latitude: pt.latitude,
-                        longitude: pt.longitude,
-                        address: f.attributes.ADDRESS,
-                        city: f.attributes.CITY,
-                    };
-                });
-
-                console.log("Coordinates:", coords);
-
-                const myPoint = new Point({
-                    latitude: currentLocation.y,
-                    longitude: currentLocation.x,
-                    spatialReference: SpatialReference.WGS84
-                });
-                const sorted = coords
-                    .map(item => {
-                        const targetPoint = new Point({
-                            latitude: item.latitude,
-                            longitude: item.longitude,
-                            spatialReference: SpatialReference.WGS84
+                    // Route drawing function
+                    window.drawRoute = async function(from, to) {
+                        console.log('🛣️ Drawing route from', from, 'to', to);
+                        
+                        const stops = [
+                            new Stop({
+                                geometry: { x: from.x, y: from.y },
+                                name: from.name,
+                            }),
+                            new Stop({
+                                geometry: { x: to.x, y: to.y },
+                                name: to.name,
+                            }),
+                        ];
+                        
+                        const routeLayer = new RouteLayer({
+                            stops,
                         });
 
-                        const distance = Math.sqrt((currentLocation.y - item.latitude) ** 2 + (currentLocation.x - item.longitude) ** 2)
+                        map.add(routeLayer);
 
-                        return { ...item, distance };
-                    })
-                    .sort((a, b) => a.distance - b.distance);
+                        try {
+                            const results = await routeLayer.solve({ 
+                                apiKey: esriConfig.apiKey 
+                            });
+                            routeLayer.update(results);
+                            window.mapView.goTo(routeLayer.routeInfo.geometry);
+                            console.log('🛣️ Route created successfully');
+                        } catch (error) {
+                            console.error('🛣️ Route creation failed:', error);
+                            alert('Failed to create route. Please try again.');
+                        }
+                    };
 
-                console.log("Sorted by distance:", sorted.slice(0, 10));
+                    // Search functionality setup
+                    window.setupSearchFunctionality = function(view) {
+                        const destination = document.querySelector("#list-destination");
+                        const searchInput = document.querySelector(".search-input");
+                        
+                        if (!searchInput) return;
 
-                destination.style.display = "block";
-                sorted.slice(0, 10).forEach((item, index) => {
-  const div = document.createElement("div");
-  div.style.marginBottom = "8px";
-  div.innerHTML = `
-    <strong>${index + 1}. ${item.city}</strong><br>
-    ${item.address}<br>
-    Distance: ${(item.distance * 111).toFixed(2)} km
-  `;
-  div.addEventListener("click", () => {
-    drawRoute({ x: currentLocation.x, y: currentLocation.y, name: "My Location" }, { x: item.longitude, y: item.latitude, name: item.city })
-    destination.style.display = "none";
-  })
-  
-  destination.appendChild(div);
-});
+                        searchInput.addEventListener("keydown", async (event) => {
+                            if (event.key === "Enter" && searchInput.value.trim()) {
+                                const searchTerm = searchInput.value.trim().toLowerCase();
+                                console.log('🔍 Searching for:', searchTerm);
+                                
+                                // Clear previous results
+                                destination.innerHTML = '';
+                                destination.style.display = "none";
+                                
+                                const results = [];
+                                
+                                // Search fire stations
+                                const fireStationsResults = await searchFireStations(view, searchTerm);
+                                results.push(...fireStationsResults);
+                                
+                                // Search users if in responder mode
+                                if (isResponder) {
+                                    const userResults = searchUsers(searchTerm);
+                                    results.push(...userResults);
+                                }
+                                
+                                // Display results
+                                if (results.length > 0) {
+                                    displaySearchResults(results, destination);
+                                } else {
+                                    destination.innerHTML = '<div class="destination-item">No results found</div>';
+                                    destination.style.display = "block";
+                                }
+                            }
+                        });
 
+                        // Hide results when clicking outside
+                        document.addEventListener('click', (event) => {
+                            if (!event.target.closest('.search-bar')) {
+                                destination.style.display = "none";
+                            }
+                        });
+                    };
+
+                    // Search fire stations
+                    window.searchFireStations = async function(view, searchTerm) {
+                        const fireStationsLayer = view.map.allLayers.find(layer => layer.title === "Fire Stations");
+                        
+                        if (!fireStationsLayer || fireStationsLayer.type !== "feature") {
+                            return [];
+                        }
+
+                        await projection.load();
+                        
+                        const query = fireStationsLayer.createQuery();
+                        query.where = "1=1";
+                        query.outFields = ["*"];
+                        query.returnGeometry = true;
+
+                        try {
+                            const result = await fireStationsLayer.queryFeatures(query);
+                            const wgs84 = SpatialReference.WGS84;
+
+                            const coords = result.features.map((f) => {
+                                const pt = projection.project(f.geometry, wgs84);
+                                return {
+                                    latitude: pt.latitude,
+                                    longitude: pt.longitude,
+                                    address: f.attributes.ADDRESS || 'Unknown Address',
+                                    city: f.attributes.CITY || 'Unknown City',
+                                    type: 'fire_station'
+                                };
+                            });
+
+                            // Filter by search term
+                            const filtered = coords.filter(item => 
+                                item.city.toLowerCase().includes(searchTerm) ||
+                                item.address.toLowerCase().includes(searchTerm)
+                            );
+
+                            // Sort by distance if we have current location
+                            if (window.currentLocation) {
+                                filtered.forEach(item => {
+                                    const distance = Math.sqrt(
+                                        Math.pow(window.currentLocation.y - item.latitude, 2) + 
+                                        Math.pow(window.currentLocation.x - item.longitude, 2)
+                                    );
+                                    item.distance = distance;
+                                });
+                                filtered.sort((a, b) => a.distance - b.distance);
+                            }
+
+                            return filtered.slice(0, 10);
+                        } catch (error) {
+                            console.error('🔍 Fire station search failed:', error);
+                            return [];
+                        }
+                    };
+
+                    // Search users
+                    window.searchUsers = function(searchTerm) {
+                        const userResults = [];
+                        
+                        Object.keys(users).forEach(deviceId => {
+                            const user = users[deviceId];
+                            if (deviceId.toLowerCase().includes(searchTerm) || 
+                                user.type === 'user') {
+                                
+                                let distance = null;
+                                if (window.currentLocation) {
+                                    distance = Math.sqrt(
+                                        Math.pow(window.currentLocation.y - user.latitude, 2) + 
+                                        Math.pow(window.currentLocation.x - user.longitude, 2)
+                                    );
+                                }
+                                
+                                userResults.push({
+                                    deviceId: deviceId,
+                                    latitude: user.latitude,
+                                    longitude: user.longitude,
+                                    type: 'user',
+                                    distance: distance,
+                                    name: `User ${deviceId.slice(-6)}`
+                                });
+                            }
+                        });
+                        
+                        if (window.currentLocation) {
+                            userResults.sort((a, b) => (a.distance || 0) - (b.distance || 0));
+                        }
+                        
+                        return userResults.slice(0, 5);
+                    };
+
+                    // Display search results
+                    window.displaySearchResults = function(results, destination) {
+                        destination.innerHTML = '';
+                        
+                        results.forEach((item, index) => {
+                            const div = document.createElement("div");
+                            div.className = "destination-item";
+                            
+                            if (item.type === 'fire_station') {
+                                div.innerHTML = `
+                                    <strong>🚒 ${index + 1}. ${item.city}</strong><br>
+                                    ${item.address}<br>
+                                    ${item.distance ? `Distance: ${(item.distance * 111).toFixed(2)} km` : ''}
+                                `;
+                                div.addEventListener("click", () => {
+                                    window.drawRoute(
+                                        { x: window.currentLocation.x, y: window.currentLocation.y, name: "My Location" }, 
+                                        { x: item.longitude, y: item.latitude, name: item.city }
+                                    );
+                                    destination.style.display = "none";
+                                });
+                            } else if (item.type === 'user') {
+                                div.innerHTML = `
+                                    <strong>👤 ${item.name}</strong><br>
+                                    Device: ${item.deviceId}<br>
+                                    ${item.distance ? `Distance: ${(item.distance * 111).toFixed(2)} km` : ''}
+                                `;
+                                div.addEventListener("click", () => {
+                                    window.drawRoute(
+                                        { x: window.currentLocation.x, y: window.currentLocation.y, name: "My Location" }, 
+                                        { x: item.longitude, y: item.latitude, name: item.name }
+                                    );
+                                    destination.style.display = "none";
+                                });
+                            }
+                            
+                            destination.appendChild(div);
+                        });
+                        
+                        destination.style.display = "block";
+                    };
+
+                    // Map click handler setup
+                    window.setupMapClickHandler = function(view) {
+                        const goToButton = document.getElementById("route-to-button");
+                        
+                        view.on("click", function (event) {
+                            view.hitTest(event).then(function (response) {
+                                const fireStations = response.results.filter(r => 
+                                    r.graphic.layer && r.graphic.layer.title === "Fire Stations"
+                                );
+                                const userGraphics = response.results.filter(r => 
+                                    r.graphic && r.graphic.attributes && r.graphic.attributes.type === "user"
+                                );
+                                
+                                if (fireStations.length > 0 || userGraphics.length > 0) {
+                                    goToButton.style.display = "block";
+                                    
+                                    // Store the target for routing
+                                    if (fireStations.length > 0) {
+                                        window.routeTarget = {
+                                            x: fireStations[0].mapPoint.longitude,
+                                            y: fireStations[0].mapPoint.latitude,
+                                            name: "Fire Station"
+                                        };
+                                    } else {
+                                        const userGraphic = userGraphics[0];
+                                        window.routeTarget = {
+                                            x: userGraphic.mapPoint.longitude,
+                                            y: userGraphic.mapPoint.latitude,
+                                            name: `User ${userGraphic.graphic.attributes.deviceId?.slice(-6) || 'Unknown'}`
+                                        };
+                                    }
+                                } else {
+                                    goToButton.style.display = "none";
+                                }
+                            });
+                        });
+
+                        // Route button click handler
+                        goToButton.addEventListener("click", () => {
+                            if (window.routeTarget && window.currentLocation) {
+                                window.drawRoute(
+                                    { x: window.currentLocation.x, y: window.currentLocation.y, name: "My Location" },
+                                    window.routeTarget
+                                );
+                                goToButton.style.display = "none";
+                            }
+                        });
+                    };
+            
+            // Make these available globally for the user update functions
+            window.Graphic = Graphic;
+            window.Point = Point;
+
+            const map = new WebMap({
+                portalItem: {
+                    id: "0d8708f95c71433daa14f4ad6965ff2d",
+                },
             });
-        }
-        }
-    });
+            
+            console.log('🗺️ WebMap created, loading...');
+
+            const graphicsLayer = new GraphicsLayer();
+            map.add(graphicsLayer);
+            window.graphicsLayer = graphicsLayer; // Make available globally
+            let userGraphic = null;
+
+                // Create responder graphic that will be updated by the main tracking function
+            window.userGraphic = null; // Make available globally
+
+
+            console.log('🗺️ Creating MapView...');
+            
+            // Check if viewDiv exists
+            const viewDiv = document.getElementById('viewDiv');
+            if (!viewDiv) {
+                console.error('🗺️ viewDiv container not found!');
+                return;
+            }
+                         console.log('🗺️ viewDiv container found:', viewDiv);
+            
+            const view = new MapView({
+                container: "viewDiv",
+                map: map,
+                extent: {
+                    xmin: -118.23849978435393,
+                    ymin: 34.13414868681906,
+                    xmax: -118.00438397317032,
+                    ymax: 34.25355759833813,
+                    spatialReference: 4326,
+                }
+            });
+            
+            // Make view available globally for routing
+            window.mapView = view;
+            
+            view.when(() => {
+                console.log('🗺️ MapView loaded successfully!');
+                
+                // Set up click handler for routing
+                setupMapClickHandler(view);
+                
+                // Set up search functionality
+                setupSearchFunctionality(view);
+            }).catch((error) => {
+                console.error('🗺️ MapView failed to load:', error);
+            });
+
+            const layerList = new LayerList({
+                view: view
+            });
+
+            let isLayerListVisible = true;
+
+            const filterBtn = document.getElementById('filter-layers-btn');
+
+            filterBtn.addEventListener('click', function () {
+                if (isLayerListVisible)
+                    view.ui.remove(layerList);
+                else
+                    view.ui.add(layerList, {
+                        position: "top-right"
+                    });
+
+                isLayerListVisible = !isLayerListVisible;
+            });
+
+            let currentLocation;
+            
+            // Make currentLocation available globally for search and routing
+            window.currentLocation = null;
+
+            if ("geolocation" in navigator) {
+                navigator.geolocation.getCurrentPosition(
+                    function (position) {
+                        const latitude = position.coords.latitude;
+                        const longitude = position.coords.longitude;
+
+                        console.log(latitude, longitude);
+                        currentLocation = { x: longitude, y: latitude };
+                        window.currentLocation = currentLocation;
+                        
+                        // Center map on current location
+                        view.goTo({
+                            center: [longitude, latitude],
+                            zoom: 15
+                        });
+                    }
+                );
+            }
+
+            // Make currentLocation available globally
+            window.currentLocation = currentLocation;
+
+            // Note: Routing functionality requires additional imports (RouteLayer, Stop)
+            // For now, focusing on the basic map display with user locations
+            
+            console.log('🗺️ Responder map initialized successfully');
+            
+            } catch (error) {
+                console.error('🗺️ Error initializing responder map:', error);
+            }
+        }); // Close inner require function for routing modules
+        }); // Close outer require function
+    } // Close responderModeFromURL check
 </script>
+
 </html>
