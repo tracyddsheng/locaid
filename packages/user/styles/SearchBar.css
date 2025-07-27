@@ -4,8 +4,8 @@
     bottom: 20px;
     padding: 0 1rem;
     display: flex;
+    flex-direction: column;
     justify-content: center;
-    z-index: 10;
     box-sizing: border-box;
     width: 100%;
 }
@@ -32,13 +32,21 @@
     color: #798491;
 }
 
-.search-icon {
+.search-icon-wrapper {
     position: absolute;
-    right: 20px;
+    z-index: 20;
+    right: 10px;
     top: 50%;
     transform: translateY(-50%);
     color: #798491;
     pointer-events: none;
-    width: 23px;
-    height: 23px;
+    width: 40px;
+    height: 40px;
+}
+
+.search-icon-wrapper > img {
+    width: 24px;
+    height: 24px;
+    margin: 8px 8px 0 0;
+    cursor: pointer;
 }
