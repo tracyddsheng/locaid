@@ -6,7 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <link rel="stylesheet" href="styles/Button.css">
     <link rel="stylesheet" href="https://js.arcgis.com/4.29/esri/themes/light/main.css" />
-    <title>Location Tracker</title>
+    <title>First Responder Mobile View</title>
+    <link rel="icon" type="image/png" href="src/assets/logo_red.png">
     <style>
         body {
             font-family: 'Barlow';
@@ -537,20 +538,38 @@
 
         try {
             const { latitude, longitude, deviceId: userDeviceId, accuracy } = userData;
-            
+            const point = new window.Point({ latitude, longitude });
+
+            const backgroundSymbol = {
+                type: "simple-marker",
+                style: "circle",
+                color: [6, 5, 5], // #060505
+                size: "24px",
+                outline: null
+            };
+
+            const iconSymbol = {
+                type: "picture-marker",
+                url: "src/assets/person.png",
+                width: "18px",
+                height: "18px"
+            };
+
             if (userGraphics[userDeviceId]) {
-                // Update existing user graphic
-                userGraphics[userDeviceId].geometry = new window.Point({ latitude, longitude });
+                // Update existing graphics
+                userGraphics[userDeviceId].background.geometry = point;
+                userGraphics[userDeviceId].icon.geometry = point;
             } else if (window.graphicsLayer) {
-                // Create new user graphic
-                const userGraphic = new window.Graphic({
-                    geometry: new window.Point({ latitude, longitude }),
-                    symbol: {
-                        type: "simple-marker",
-                        color: [226, 119, 40], // Orange for users
-                        size: "14px",
-                        outline: { color: "white", width: 2 }
-                    },
+                // Create new user graphics
+                const backgroundGraphic = new window.Graphic({
+                    geometry: point,
+                    symbol: backgroundSymbol,
+                    attributes: { type: "user-background" } // To help with hit-testing if needed
+                });
+
+                const iconGraphic = new window.Graphic({
+                    geometry: point,
+                    symbol: iconSymbol,
                     attributes: { 
                         type: "user", 
                         deviceId: userDeviceId,
@@ -562,8 +581,8 @@
                     }
                 });
                 
-                window.graphicsLayer.add(userGraphic);
-                userGraphics[userDeviceId] = userGraphic;
+                window.graphicsLayer.addMany([backgroundGraphic, iconGraphic]);
+                userGraphics[userDeviceId] = { background: backgroundGraphic, icon: iconGraphic };
                 console.log('🗺️ Added user to map:', userDeviceId);
             }
         } catch (error) {
@@ -579,27 +598,44 @@
 
         try {
             const { latitude, longitude, accuracy } = position.coords;
+            const point = new window.Point({ latitude, longitude });
+
+            const backgroundSymbol = {
+                type: "simple-marker",
+                style: "circle",
+                color: [34, 24, 63], // #22183f
+                size: "24px",
+                outline: null
+            };
+
+            const iconSymbol = {
+                type: "picture-marker",
+                url: "src/assets/plus.png",
+                width: "18px",
+                height: "18px"
+            };
             
-            if (window.userGraphic) {
+            if (window.responderGraphics) {
                 // Update existing responder graphic
-                window.userGraphic.geometry = new window.Point({ latitude, longitude });
+                window.responderGraphics.background.geometry = point;
+                window.responderGraphics.icon.geometry = point;
             } else if (window.graphicsLayer) {
                 // Create new responder graphic
-                window.userGraphic = new window.Graphic({
-                    geometry: new window.Point({ latitude, longitude }),
-                    symbol: {
-                        type: "simple-marker",
-                        color: [0, 122, 194], // Blue for responder
-                        size: "16px",
-                        outline: { color: "white", width: 2 }
-                    },
+                const backgroundGraphic = new window.Graphic({
+                    geometry: point,
+                    symbol: backgroundSymbol
+                });
+                const iconGraphic = new window.Graphic({
+                    geometry: point,
+                    symbol: iconSymbol,
                     attributes: { 
                         type: "responder", 
                         deviceId: deviceId,
                         accuracy: accuracy 
                     }
                 });
-                window.graphicsLayer.add(window.userGraphic);
+                window.graphicsLayer.addMany([backgroundGraphic, iconGraphic]);
+                window.responderGraphics = { background: backgroundGraphic, icon: iconGraphic };
                 console.log('🗺️ Created responder graphic on map');
             }
         } catch (error) {
@@ -689,7 +725,7 @@
                 
                 try {
                     // Set API key
-                    esriConfig.apiKey = "AAPTxy8BH1VEsoebNVZXo8HurJNkc1laRp1vAwT3-tXnuF3x-hGfL7b7jMe3CM0GiMyuTTg-lrFRdjvrAWsq9NCjJTcBWf_1bK0AoEE-eukjSiR7_41IaU8ZbnZytMHzhJvd87ZnvexVuj65yOBoclKr2N3ciauOPysAhdUze5Xm2KImfnxpA2Tnh9ANk5OTLlVMowDfQQ6RT5TIcg7um6QJUQi8VHORtLw0-sg5yUsCrVb1Hnp4zkT4zV-ZxpYG0_HAAT1_teoS1mtm";
+                    esriConfig.apiKey = "AAPTxy8BH1VEsoebNVZXo8HurJNkc1laRp1vAwT3-tXnuF3x-hGfL7b7jMe3CM0GiMyuTTg-lrFRdjvrAWsq9NCjJTcBWf_1bK0AoEE-eukjSiR7_41IaU8ZbnZytMHzhJvd87ZnvexVuj65yOBoclKr2N3NciauOPysAhdUze5Xm2KImfnxpA2Tnh9ANk5OTLlVMowDfQQ6RT5TIcg7um6QJUQi8VHORtLw0-sg5yUsCrVb1Hnp4zkT4zV-ZxpYG0_HAAT1_teoS1mtm";
                     
                     console.log('🗺️ Starting map initialization for responder...');
 
@@ -960,7 +996,7 @@
 
             const map = new WebMap({
                 portalItem: {
-                    id: "0d8708f95c71433daa14f4ad6965ff2d",
+                    id: "743d191198274f03920cb6e399f19f8b",
                 },
             });
             
@@ -972,7 +1008,7 @@
             let userGraphic = null;
 
                 // Create responder graphic that will be updated by the main tracking function
-            window.userGraphic = null; // Make available globally
+            window.responderGraphics = null; // Make available globally
 
 
             console.log('🗺️ Creating MapView...');

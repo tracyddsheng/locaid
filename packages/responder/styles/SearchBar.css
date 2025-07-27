@@ -2,10 +2,12 @@
     position: absolute;
     left: 0;
     bottom: 20px;
-    padding: 0 1rem;
+    width: 100%;
+    padding: 0 10px;
     display: flex;
     flex-direction: column;
     justify-content: center;
+    align-items: center;
     box-sizing: border-box;
     width: 100%;
 }
