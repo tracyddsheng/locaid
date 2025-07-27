@@ -161,10 +161,36 @@
             transform: translate(-50%, -50%);
             background-color: white;
             border: solid 1px black;
-
             border-radius: 5px;
-
             padding: 10px;
+            cursor: pointer;
+            z-index: 1000;
+        }
+
+        #list-destination {
+            max-height: 200px;
+            background-color: white;
+            padding: 12px 12px;
+            margin-bottom: 8px;
+            border-radius: 8px;
+            display: none;
+            overflow-y: auto;
+            z-index: 1000;
+        }
+
+        .destination-item {
+            padding: 8px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .destination-item:hover {
+            background-color: #f0f0f0;
+        }
+
+        .destination-item:last-child {
+            border-bottom: none;
         }
     </style>
 </head>
@@ -179,12 +205,15 @@
     <div class="content-contatiner">
         <div id="viewDiv" class="map-container">
 
-            <!-- <div class="search-bar">
+            <div class="search-bar">
+                <div id="list-destination"></div>
                 <div class="search-bar-inner">
-                    <input type="search" class="search-input" placeholder="Search location..." />
-                    <img class="search-icon" src="src/assets/search.png"></img>
+                    <input type="search" class="search-input" placeholder="Search fire stations or users..." />
+                    <div class="search-icon-wrapper" id="search-icon-wrapper">
+                        <img class="search-icon" src="src/assets/search.png" />
+                    </div>
                 </div>
-            </div> -->
+            </div>
         </div>
 
         <div id="route-to-button">Route to</div>
@@ -649,12 +678,281 @@
             "esri/Graphic",
             "esri/geometry/Point",
             "esri/widgets/LayerList"
-        ], function(esriConfig, WebMap, MapView, GraphicsLayer, Graphic, Point, LayerList) {
-            try {
-                // Set API key
-                esriConfig.apiKey = "AAPTxy8BH1VEsoebNVZXo8HurJNkc1laRp1vAwT3-tXnuF3x-hGfL7b7jMe3CM0GiMyuTTg-lrFRdjvrAWsq9NCjJTcBWf_1bK0AoEE-eukjSiR7_41IaU8ZbnZytMHzhJvd87ZnvexVuj65yOBoclKr2N3ciauOPysAhdUze5Xm2KImfnxpA2Tnh9ANk5OTLlVMowDfQQ6RT5TIcg7um6QJUQi8VHORtLw0-sg5yUsCrVb1Hnp4zkT4zV-ZxpYG0_HAAT1_teoS1mtm";
+                ], function(esriConfig, WebMap, MapView, GraphicsLayer, Graphic, Point, LayerList) {
+            // Also load routing modules
+            require([
+                "esri/layers/RouteLayer",
+                "esri/rest/support/Stop",
+                "esri/geometry/projection",
+                "esri/geometry/SpatialReference"
+            ], function(RouteLayer, Stop, projection, SpatialReference) {
                 
-                console.log('🗺️ Starting map initialization for responder...');
+                try {
+                    // Set API key
+                    esriConfig.apiKey = "AAPTxy8BH1VEsoebNVZXo8HurJNkc1laRp1vAwT3-tXnuF3x-hGfL7b7jMe3CM0GiMyuTTg-lrFRdjvrAWsq9NCjJTcBWf_1bK0AoEE-eukjSiR7_41IaU8ZbnZytMHzhJvd87ZnvexVuj65yOBoclKr2N3ciauOPysAhdUze5Xm2KImfnxpA2Tnh9ANk5OTLlVMowDfQQ6RT5TIcg7um6QJUQi8VHORtLw0-sg5yUsCrVb1Hnp4zkT4zV-ZxpYG0_HAAT1_teoS1mtm";
+                    
+                    console.log('🗺️ Starting map initialization for responder...');
+
+                    // Route drawing function
+                    window.drawRoute = async function(from, to) {
+                        console.log('🛣️ Drawing route from', from, 'to', to);
+                        
+                        const stops = [
+                            new Stop({
+                                geometry: { x: from.x, y: from.y },
+                                name: from.name,
+                            }),
+                            new Stop({
+                                geometry: { x: to.x, y: to.y },
+                                name: to.name,
+                            }),
+                        ];
+                        
+                        const routeLayer = new RouteLayer({
+                            stops,
+                        });
+
+                        map.add(routeLayer);
+
+                        try {
+                            const results = await routeLayer.solve({ 
+                                apiKey: esriConfig.apiKey 
+                            });
+                            routeLayer.update(results);
+                            window.mapView.goTo(routeLayer.routeInfo.geometry);
+                            console.log('🛣️ Route created successfully');
+                        } catch (error) {
+                            console.error('🛣️ Route creation failed:', error);
+                            alert('Failed to create route. Please try again.');
+                        }
+                    };
+
+                    // Search functionality setup
+                    window.setupSearchFunctionality = function(view) {
+                        const destination = document.querySelector("#list-destination");
+                        const searchInput = document.querySelector(".search-input");
+                        
+                        if (!searchInput) return;
+
+                        searchInput.addEventListener("keydown", async (event) => {
+                            if (event.key === "Enter" && searchInput.value.trim()) {
+                                const searchTerm = searchInput.value.trim().toLowerCase();
+                                console.log('🔍 Searching for:', searchTerm);
+                                
+                                // Clear previous results
+                                destination.innerHTML = '';
+                                destination.style.display = "none";
+                                
+                                const results = [];
+                                
+                                // Search fire stations
+                                const fireStationsResults = await searchFireStations(view, searchTerm);
+                                results.push(...fireStationsResults);
+                                
+                                // Search users if in responder mode
+                                if (isResponder) {
+                                    const userResults = searchUsers(searchTerm);
+                                    results.push(...userResults);
+                                }
+                                
+                                // Display results
+                                if (results.length > 0) {
+                                    displaySearchResults(results, destination);
+                                } else {
+                                    destination.innerHTML = '<div class="destination-item">No results found</div>';
+                                    destination.style.display = "block";
+                                }
+                            }
+                        });
+
+                        // Hide results when clicking outside
+                        document.addEventListener('click', (event) => {
+                            if (!event.target.closest('.search-bar')) {
+                                destination.style.display = "none";
+                            }
+                        });
+                    };
+
+                    // Search fire stations
+                    window.searchFireStations = async function(view, searchTerm) {
+                        const fireStationsLayer = view.map.allLayers.find(layer => layer.title === "Fire Stations");
+                        
+                        if (!fireStationsLayer || fireStationsLayer.type !== "feature") {
+                            return [];
+                        }
+
+                        await projection.load();
+                        
+                        const query = fireStationsLayer.createQuery();
+                        query.where = "1=1";
+                        query.outFields = ["*"];
+                        query.returnGeometry = true;
+
+                        try {
+                            const result = await fireStationsLayer.queryFeatures(query);
+                            const wgs84 = SpatialReference.WGS84;
+
+                            const coords = result.features.map((f) => {
+                                const pt = projection.project(f.geometry, wgs84);
+                                return {
+                                    latitude: pt.latitude,
+                                    longitude: pt.longitude,
+                                    address: f.attributes.ADDRESS || 'Unknown Address',
+                                    city: f.attributes.CITY || 'Unknown City',
+                                    type: 'fire_station'
+                                };
+                            });
+
+                            // Filter by search term
+                            const filtered = coords.filter(item => 
+                                item.city.toLowerCase().includes(searchTerm) ||
+                                item.address.toLowerCase().includes(searchTerm)
+                            );
+
+                            // Sort by distance if we have current location
+                            if (window.currentLocation) {
+                                filtered.forEach(item => {
+                                    const distance = Math.sqrt(
+                                        Math.pow(window.currentLocation.y - item.latitude, 2) + 
+                                        Math.pow(window.currentLocation.x - item.longitude, 2)
+                                    );
+                                    item.distance = distance;
+                                });
+                                filtered.sort((a, b) => a.distance - b.distance);
+                            }
+
+                            return filtered.slice(0, 10);
+                        } catch (error) {
+                            console.error('🔍 Fire station search failed:', error);
+                            return [];
+                        }
+                    };
+
+                    // Search users
+                    window.searchUsers = function(searchTerm) {
+                        const userResults = [];
+                        
+                        Object.keys(users).forEach(deviceId => {
+                            const user = users[deviceId];
+                            if (deviceId.toLowerCase().includes(searchTerm) || 
+                                user.type === 'user') {
+                                
+                                let distance = null;
+                                if (window.currentLocation) {
+                                    distance = Math.sqrt(
+                                        Math.pow(window.currentLocation.y - user.latitude, 2) + 
+                                        Math.pow(window.currentLocation.x - user.longitude, 2)
+                                    );
+                                }
+                                
+                                userResults.push({
+                                    deviceId: deviceId,
+                                    latitude: user.latitude,
+                                    longitude: user.longitude,
+                                    type: 'user',
+                                    distance: distance,
+                                    name: `User ${deviceId.slice(-6)}`
+                                });
+                            }
+                        });
+                        
+                        if (window.currentLocation) {
+                            userResults.sort((a, b) => (a.distance || 0) - (b.distance || 0));
+                        }
+                        
+                        return userResults.slice(0, 5);
+                    };
+
+                    // Display search results
+                    window.displaySearchResults = function(results, destination) {
+                        destination.innerHTML = '';
+                        
+                        results.forEach((item, index) => {
+                            const div = document.createElement("div");
+                            div.className = "destination-item";
+                            
+                            if (item.type === 'fire_station') {
+                                div.innerHTML = `
+                                    <strong>🚒 ${index + 1}. ${item.city}</strong><br>
+                                    ${item.address}<br>
+                                    ${item.distance ? `Distance: ${(item.distance * 111).toFixed(2)} km` : ''}
+                                `;
+                                div.addEventListener("click", () => {
+                                    window.drawRoute(
+                                        { x: window.currentLocation.x, y: window.currentLocation.y, name: "My Location" }, 
+                                        { x: item.longitude, y: item.latitude, name: item.city }
+                                    );
+                                    destination.style.display = "none";
+                                });
+                            } else if (item.type === 'user') {
+                                div.innerHTML = `
+                                    <strong>👤 ${item.name}</strong><br>
+                                    Device: ${item.deviceId}<br>
+                                    ${item.distance ? `Distance: ${(item.distance * 111).toFixed(2)} km` : ''}
+                                `;
+                                div.addEventListener("click", () => {
+                                    window.drawRoute(
+                                        { x: window.currentLocation.x, y: window.currentLocation.y, name: "My Location" }, 
+                                        { x: item.longitude, y: item.latitude, name: item.name }
+                                    );
+                                    destination.style.display = "none";
+                                });
+                            }
+                            
+                            destination.appendChild(div);
+                        });
+                        
+                        destination.style.display = "block";
+                    };
+
+                    // Map click handler setup
+                    window.setupMapClickHandler = function(view) {
+                        const goToButton = document.getElementById("route-to-button");
+                        
+                        view.on("click", function (event) {
+                            view.hitTest(event).then(function (response) {
+                                const fireStations = response.results.filter(r => 
+                                    r.graphic.layer && r.graphic.layer.title === "Fire Stations"
+                                );
+                                const userGraphics = response.results.filter(r => 
+                                    r.graphic && r.graphic.attributes && r.graphic.attributes.type === "user"
+                                );
+                                
+                                if (fireStations.length > 0 || userGraphics.length > 0) {
+                                    goToButton.style.display = "block";
+                                    
+                                    // Store the target for routing
+                                    if (fireStations.length > 0) {
+                                        window.routeTarget = {
+                                            x: fireStations[0].mapPoint.longitude,
+                                            y: fireStations[0].mapPoint.latitude,
+                                            name: "Fire Station"
+                                        };
+                                    } else {
+                                        const userGraphic = userGraphics[0];
+                                        window.routeTarget = {
+                                            x: userGraphic.mapPoint.longitude,
+                                            y: userGraphic.mapPoint.latitude,
+                                            name: `User ${userGraphic.graphic.attributes.deviceId?.slice(-6) || 'Unknown'}`
+                                        };
+                                    }
+                                } else {
+                                    goToButton.style.display = "none";
+                                }
+                            });
+                        });
+
+                        // Route button click handler
+                        goToButton.addEventListener("click", () => {
+                            if (window.routeTarget && window.currentLocation) {
+                                window.drawRoute(
+                                    { x: window.currentLocation.x, y: window.currentLocation.y, name: "My Location" },
+                                    window.routeTarget
+                                );
+                                goToButton.style.display = "none";
+                            }
+                        });
+                    };
             
             // Make these available globally for the user update functions
             window.Graphic = Graphic;
@@ -685,7 +983,7 @@
                 console.error('🗺️ viewDiv container not found!');
                 return;
             }
-            console.log('🗺️ viewDiv container found:', viewDiv);
+                         console.log('🗺️ viewDiv container found:', viewDiv);
             
             const view = new MapView({
                 container: "viewDiv",
@@ -699,8 +997,17 @@
                 }
             });
             
+            // Make view available globally for routing
+            window.mapView = view;
+            
             view.when(() => {
                 console.log('🗺️ MapView loaded successfully!');
+                
+                // Set up click handler for routing
+                setupMapClickHandler(view);
+                
+                // Set up search functionality
+                setupSearchFunctionality(view);
             }).catch((error) => {
                 console.error('🗺️ MapView failed to load:', error);
             });
@@ -725,6 +1032,9 @@
             });
 
             let currentLocation;
+            
+            // Make currentLocation available globally for search and routing
+            window.currentLocation = null;
 
             if ("geolocation" in navigator) {
                 navigator.geolocation.getCurrentPosition(
@@ -734,9 +1044,19 @@
 
                         console.log(latitude, longitude);
                         currentLocation = { x: longitude, y: latitude };
+                        window.currentLocation = currentLocation;
+                        
+                        // Center map on current location
+                        view.goTo({
+                            center: [longitude, latitude],
+                            zoom: 15
+                        });
                     }
                 );
             }
+
+            // Make currentLocation available globally
+            window.currentLocation = currentLocation;
 
             // Note: Routing functionality requires additional imports (RouteLayer, Stop)
             // For now, focusing on the basic map display with user locations
@@ -746,7 +1066,8 @@
             } catch (error) {
                 console.error('🗺️ Error initializing responder map:', error);
             }
-        }); // Close require function
+        }); // Close inner require function for routing modules
+        }); // Close outer require function
     } // Close responderModeFromURL check
 </script>
 
