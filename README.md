@@ -1,5 +1,6 @@
 ## Devpost link: https://devpost.com/software/locaid
-----
+
+---
 
 .env files: packages/server/.env contains EMAIL_USER=__________ EMAIL_PASS=__________
 
