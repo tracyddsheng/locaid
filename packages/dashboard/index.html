@@ -322,7 +322,7 @@
 
             const map = new WebMap({
                 portalItem: {
-                    id: "0d8708f95c71433daa14f4ad6965ff2d"
+                    id: "743d191198274f03920cb6e399f19f8b"
                 }
             });
 
@@ -759,13 +759,40 @@ Copy/Paste: ${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}`;
                 const accuracyCircle = geometryEngine.geodesicBuffer(point, accuracy, "meters");
 
                 // Define symbols based on the user type
-                const pointColor = type === 'responder' ? [0, 122, 194] : [226, 119, 40]; // Blue for responders, Orange for users
-                const pointSymbol = {
-                    type: "simple-marker",
-                    size: 12, // Increased size for better visibility
-                    color: pointColor,
-                    outline: { width: 1, color: "white" }
-                };
+                let iconSymbol, backgroundSymbol, pointColor;
+
+                if (type === 'responder') {
+                    pointColor = [34,24,63]; // #22183f
+                    iconSymbol = {
+                        type: "picture-marker",
+                        url: "imgs/plus.png",
+                        width: "18px",
+                        height: "18px"
+                    };
+                    backgroundSymbol = {
+                        type: "simple-marker",
+                        style: "circle",
+                        color: pointColor,
+                        size: "24px",
+                        outline: null
+                    };
+                } else { // 'user'
+                    pointColor = [6, 5, 5]; // #060505
+                    iconSymbol = {
+                        type: "picture-marker",
+                        url: "imgs/person.png",
+                        width: "18px",
+                        height: "18px"
+                    };
+                    backgroundSymbol = {
+                        type: "simple-marker",
+                        style: "circle",
+                        color: pointColor,
+                        size: "24px",
+                        outline: null
+                    };
+                }
+
                 const circleSymbol = {
                     type: "simple-fill",
                     color: [...pointColor, 0.2], // Use the same base color but with transparency
@@ -778,8 +805,10 @@ Copy/Paste: ${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}`;
                 if (liveGraphics[deviceId]) {
                     const graphics = liveGraphics[deviceId];
                     graphics.point.geometry = point;
+                    graphics.background.geometry = point;
                     graphics.circle.geometry = accuracyCircle;
-                    graphics.point.symbol = pointSymbol; // Update symbol in case type changes
+                    graphics.point.symbol = iconSymbol;
+                    graphics.background.symbol = backgroundSymbol;
                     graphics.circle.symbol = circleSymbol;
                     graphics.point.attributes.accuracy = accuracy ? accuracy.toFixed(0) : 0;
                     graphics.lastUpdate = Date.now(); // Update timestamp
@@ -789,9 +818,14 @@ Copy/Paste: ${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}`;
                         symbol: circleSymbol
                     });
 
+                    const backgroundGraphic = new Graphic({
+                        geometry: point,
+                        symbol: backgroundSymbol
+                    });
+
                     const pointGraphic = new Graphic({
                         geometry: point,
-                        symbol: pointSymbol,
+                        symbol: iconSymbol,
                         attributes: {
                             deviceId: deviceId,
                             accuracy: accuracy ? accuracy.toFixed(0) : 0,
@@ -803,10 +837,11 @@ Copy/Paste: ${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}`;
                         }
                     });
 
-                    graphicsLayer.addMany([circleGraphic, pointGraphic]);
+                    graphicsLayer.addMany([circleGraphic, backgroundGraphic, pointGraphic]);
                     
                     liveGraphics[deviceId] = {
                         point: pointGraphic,
+                        background: backgroundGraphic,
                         circle: circleGraphic,
                         lastUpdate: Date.now() // Set initial timestamp
                     };
@@ -823,8 +858,10 @@ Copy/Paste: ${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}`;
                 for (const deviceId in liveGraphics) {
                     if (now - liveGraphics[deviceId].lastUpdate > STALE_DATA_TIMEOUT) {
                         console.log(`Removing stale unit: ${deviceId}`);
-                        graphicsLayer.remove(liveGraphics[deviceId].point);
-                        graphicsLayer.remove(liveGraphics[deviceId].circle);
+                        const graphics = liveGraphics[deviceId];
+                        graphicsLayer.remove(graphics.point);
+                        graphicsLayer.remove(graphics.background);
+                        graphicsLayer.remove(graphics.circle);
                         delete liveGraphics[deviceId];
                         updateLiveUnitsList(); // Update the list
                     }
