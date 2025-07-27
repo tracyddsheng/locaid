@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <link rel="stylesheet" href="styles/Button.css">
+    <link rel="stylesheet" href="styles/Popup.css">
     <title>Location Tracker</title>
     <style>
         body {
@@ -108,7 +109,7 @@
         }
 
         .logo {
-            height: 40px;
+            height: 50px;
         }
 
         .main-content {
@@ -165,25 +166,16 @@
 
             padding: 10px;
         }
-        #list-destination {
-            max-height: 200px;
-
-            background-color: white;
-
-            padding: 12px 12px;
-            margin-bottom: 8px;
-            border-radius: 8px;
-
-            display: none;
-            overflow-y: auto;
-        }
     </style>
 </head>
 
 <body>
     <header class="header" style="background-color: white;">
-        <img src="src/assets/logo.png" alt="LocAid Logo" class="logo">
-        <button class="button" onclick="window.location.href='tracker.html'">
+        <img src="src/assets/logo_red.png" alt="LocAid Logo" class="logo">
+        <button id="assistance" class="button button-alt">
+            Request Assistance
+        </button>
+        <button id="911" class="button">
             Call 911
         </button>
         <button class="button-settings">☰</button>
@@ -194,18 +186,12 @@
 
             <div id="viewDiv"></div>
 
-
-            <div class="search-bar">
-                <div id="list-destination">
-
-                </div>
+            <!-- <div class="search-bar">
                 <div class="search-bar-inner">
                     <input type="search" class="search-input" placeholder="Search location..." />
-                    <div class="search-icon-wrapper" id="search-icon-wrapper">
-                        <img class="search-icon" src="src/assets/search.png" />
-                    </div>
+                    <img class="search-icon" src="src/assets/search.png"></img>
                 </div>
-            </div>
+            </div> -->
         </div>
 
         <div id="route-to-button">Route to</div>
@@ -217,9 +203,9 @@
             <!-- <button id="responderBtn" class="button">Responder Mode</button>
             <button id="stopBtn" class="button hidden">Stop Tracking</button> -->
         </div>
-        </main>
+    </main>    
 
-        <!-- <div id="arrow-container" class="hidden">
+    <!-- <div id="arrow-container" class="hidden">
         <div id="arrow">⬆️</div>
     </div> -->
 
@@ -444,7 +430,7 @@
 </script>
 
 <script type="module" defer>
-    const [Map, WebMap, LayerList, MapView, FeatureLayer, GeoJSONLayer, GraphicsLayer, RouteLayer, Stop, PolygonBarrier, PolylineBarrier, Locate, Graphic, projection, SpatialReference, Point, geometryEngine] = await $arcgis.import([
+    const [Map, WebMap, LayerList, MapView, FeatureLayer, GeoJSONLayer, GraphicsLayer, RouteLayer, Stop, PolygonBarrier, PolylineBarrier, Locate, Graphic] = await $arcgis.import([
         "@arcgis/core/Map.js",
         "@arcgis/core/WebMap.js",
         "@arcgis/core/widgets/LayerList.js",
@@ -458,10 +444,6 @@
         "@arcgis/core/rest/support/PolylineBarrier.js",
         "@arcgis/core/widgets/Locate.js",
         "@arcgis/core/Graphic.js",
-        "@arcgis/core/geometry/projection.js",
-        "@arcgis/core/geometry/SpatialReference.js",
-        "esri/geometry/Point",
-        "@arcgis/core/geometry/geometryEngine.js",
     ]);
 
     //   const map = new Map({
@@ -508,6 +490,7 @@
             })
     }
 
+
     const view = new MapView({
         container: "viewDiv",
         map: map,
@@ -551,11 +534,6 @@
 
                 console.log(latitude, longitude)
                 currentLocation = { x: longitude, y: latitude }
-
-                view.goTo({
-                center: [longitude, latitude],
-                zoom: 15
-                });
             }
         )
     }
@@ -579,8 +557,6 @@
 
         const results = await routeLayer.solve({ apiKey: "AAPTxy8BH1VEsoebNVZXo8HurJNkc1laRp1vAwT3-tXnuF3x-hGfL7b7jMe3CM0GiMyuTTg-lrFRdjvrAWsq9NCjJTcBWf_1bK0AoEE-eukjSiR7_41IaU8ZbnZytMHzhJvd87ZnvexVuj65yOBoclKr2N3ciauOPysAhdUze5Xm2KImfnxpA2Tnh9ANk5OTLlVMowDfQQ6RT5TIcg7um6QJUQi8VHORtLw0-sg5yUsCrVb1Hnp4zkT4zV-ZxpYG0_HAAT1_teoS1mtm" });
         routeLayer.update(results);
-
-        view.goTo(routeLayer.routeInfo.geometry);
     }
 
     const goToButton = document.getElementById("route-to-button")
@@ -596,6 +572,8 @@
                 goToButton.style.display = "none"
             }
 
+            // fireStaions.mapPoint.latitude
+
             goToButton.addEventListener("click", () => {
                 drawRoute({ x: currentLocation.x, y: currentLocation.y, name: "My Location" }, { x: fireStaions[0].mapPoint.longitude, y: fireStaions[0].mapPoint.latitude, name: "Los Angeles County Fire Dept. Station 97" })
 
@@ -603,80 +581,6 @@
             })
         })
     })
-
-    console.log(document.getElementById("search-icon-wrapper"))
-
-    const destination = document.querySelector("#list-destination");
-
-    document.querySelector(".search-input").addEventListener("keydown", async () => {
-        if (event.key === "Enter") {
-            const fireStationsLayer = view.map.allLayers.find(layer => layer.title === "Fire Stations");
-
-        await projection.load();
-
-        if (fireStationsLayer && fireStationsLayer.type === "feature") {
-            
-            const query = fireStationsLayer.createQuery();
-            query.where = "1=1"; // all features
-            query.outFields = ["*"];
-            query.returnGeometry = true;
-
-            fireStationsLayer.queryFeatures(query).then(result => {
-                const wgs84 = SpatialReference.WGS84;
-
-                const coords = result.features.map((f) => {
-                    const pt = projection.project(f.geometry, wgs84);
-                    return {
-                        latitude: pt.latitude,
-                        longitude: pt.longitude,
-                        address: f.attributes.ADDRESS,
-                        city: f.attributes.CITY,
-                    };
-                });
-
-                console.log("Coordinates:", coords);
-
-                const myPoint = new Point({
-                    latitude: currentLocation.y,
-                    longitude: currentLocation.x,
-                    spatialReference: SpatialReference.WGS84
-                });
-                const sorted = coords
-                    .map(item => {
-                        const targetPoint = new Point({
-                            latitude: item.latitude,
-                            longitude: item.longitude,
-                            spatialReference: SpatialReference.WGS84
-                        });
-
-                        const distance = Math.sqrt((currentLocation.y - item.latitude) ** 2 + (currentLocation.x - item.longitude) ** 2)
-
-                        return { ...item, distance };
-                    })
-                    .sort((a, b) => a.distance - b.distance);
-
-                console.log("Sorted by distance:", sorted.slice(0, 10));
-
-                destination.style.display = "block";
-                sorted.slice(0, 10).forEach((item, index) => {
-  const div = document.createElement("div");
-  div.style.marginBottom = "8px";
-  div.innerHTML = `
-    <strong>${index + 1}. ${item.city}</strong><br>
-    ${item.address}<br>
-    Distance: ${(item.distance * 111).toFixed(2)} km
-  `;
-  div.addEventListener("click", () => {
-    drawRoute({ x: currentLocation.x, y: currentLocation.y, name: "My Location" }, { x: item.longitude, y: item.latitude, name: item.city })
-    destination.style.display = "none";
-  })
-  
-  destination.appendChild(div);
-});
-
-            });
-        }
-        }
-    });
 </script>
+
 </html>
