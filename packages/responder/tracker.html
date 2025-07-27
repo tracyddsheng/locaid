@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <link rel="stylesheet" href="styles/Button.css">
+    <link rel="stylesheet" href="https://js.arcgis.com/4.29/esri/themes/light/main.css" />
     <title>Location Tracker</title>
     <style>
         body {
@@ -81,14 +82,7 @@
 
     <title>Location Tracker</title>
 
-    <!-- Load Calcite components from CDN -->
-    <script type="module" src="https://js.arcgis.com/calcite-components/3.2.1/calcite.esm.js"></script>
-    <!-- Load the ArcGIS Maps SDK for JavaScript from CDN -->
-    <link rel="stylesheet" href="https://js.arcgis.com/4.33/esri/themes/light/main.css" />
-    <script src="https://js.arcgis.com/4.33/"></script>
 
-    <!-- Load Map components from CDN-->
-    <script type="module" src="https://js.arcgis.com/4.33/map-components/"></script>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -150,6 +144,11 @@
             flex: 1;
         }
 
+        #viewDiv {
+            width: 100%;
+            height: 100%;
+        }
+
         #filter-layers-btn {
             background-color: #42454A;
         }
@@ -180,8 +179,6 @@
     <div class="content-contatiner">
         <div id="viewDiv" class="map-container">
 
-            <div id="viewDiv"></div>
-
             <!-- <div class="search-bar">
                 <div class="search-bar-inner">
                     <input type="search" class="search-input" placeholder="Search location..." />
@@ -208,6 +205,7 @@
     </div>
 
 </body>
+<script src="https://js.arcgis.com/4.29/"></script>
 <script defer>
     // --- CONFIGURATION ---
     const SERVER_URL = `/location`;
@@ -237,6 +235,7 @@
     let latestHeading = 0; // Store the compass heading
     let arrowVisible = false; // Track arrow visibility state
     let compassSetup = false; // Track if compass has been set up
+    let userGraphics = {}; // Store user graphics by deviceId
 
     // --- FUNCTIONS ---
     function getOrSetDeviceId() {
@@ -299,6 +298,8 @@
                 window.latestPosition = position;
                 if (isResponder) {
                     findNearestUserAndPoint();
+                    // Update responder's own location on map
+                    updateResponderOnMap(position);
                 }
             },
             (error) => { updateStatus(`Geolocation error: ${error.message}`, true); },
@@ -357,6 +358,8 @@
             if (locationData.deviceId !== deviceId && locationData.type === 'user') {
                 users[locationData.deviceId] = locationData;
                 findNearestUserAndPoint();
+                // Update user on map if map is available
+                updateUserOnMap(locationData);
             }
         };
 
@@ -497,6 +500,84 @@
         console.log('🧭 Manual calibration - current heading:', latestHeading);
     }
 
+    function updateUserOnMap(userData) {
+        // Only update map if we're in responder mode and have map objects available
+        if (!isResponder || typeof window.Graphic === 'undefined' || typeof window.Point === 'undefined') {
+            return;
+        }
+
+        try {
+            const { latitude, longitude, deviceId: userDeviceId, accuracy } = userData;
+            
+            if (userGraphics[userDeviceId]) {
+                // Update existing user graphic
+                userGraphics[userDeviceId].geometry = new window.Point({ latitude, longitude });
+            } else if (window.graphicsLayer) {
+                // Create new user graphic
+                const userGraphic = new window.Graphic({
+                    geometry: new window.Point({ latitude, longitude }),
+                    symbol: {
+                        type: "simple-marker",
+                        color: [226, 119, 40], // Orange for users
+                        size: "14px",
+                        outline: { color: "white", width: 2 }
+                    },
+                    attributes: { 
+                        type: "user", 
+                        deviceId: userDeviceId,
+                        accuracy: accuracy 
+                    },
+                    popupTemplate: {
+                        title: "User: {deviceId}",
+                        content: "Accuracy: {accuracy}m"
+                    }
+                });
+                
+                window.graphicsLayer.add(userGraphic);
+                userGraphics[userDeviceId] = userGraphic;
+                console.log('🗺️ Added user to map:', userDeviceId);
+            }
+        } catch (error) {
+            console.log('🗺️ Map not ready yet for user updates:', error);
+        }
+    }
+
+    function updateResponderOnMap(position) {
+        // Only update map if we're in responder mode and have map objects available
+        if (!isResponder || typeof window.Graphic === 'undefined' || typeof window.Point === 'undefined') {
+            return;
+        }
+
+        try {
+            const { latitude, longitude, accuracy } = position.coords;
+            
+            if (window.userGraphic) {
+                // Update existing responder graphic
+                window.userGraphic.geometry = new window.Point({ latitude, longitude });
+            } else if (window.graphicsLayer) {
+                // Create new responder graphic
+                window.userGraphic = new window.Graphic({
+                    geometry: new window.Point({ latitude, longitude }),
+                    symbol: {
+                        type: "simple-marker",
+                        color: [0, 122, 194], // Blue for responder
+                        size: "16px",
+                        outline: { color: "white", width: 2 }
+                    },
+                    attributes: { 
+                        type: "responder", 
+                        deviceId: deviceId,
+                        accuracy: accuracy 
+                    }
+                });
+                window.graphicsLayer.add(window.userGraphic);
+                console.log('🗺️ Created responder graphic on map');
+            }
+        } catch (error) {
+            console.log('🗺️ Map not ready yet for responder updates:', error);
+        }
+    }
+
     function findNearestUserAndPoint() {
         if (!arrowVisible || !window.latestPosition || Object.keys(users).length === 0) {
             arrow.style.transform = 'rotate(0deg) scale(0)';
@@ -556,158 +637,117 @@
 
 </script>
 
-<script type="module" defer>
-    const [Map, WebMap, LayerList, MapView, FeatureLayer, GeoJSONLayer, GraphicsLayer, RouteLayer, Stop, PolygonBarrier, PolylineBarrier, Locate, Graphic] = await $arcgis.import([
-        "@arcgis/core/Map.js",
-        "@arcgis/core/WebMap.js",
-        "@arcgis/core/widgets/LayerList.js",
-        "@arcgis/core/views/MapView.js",
-        "@arcgis/core/layers/FeatureLayer.js",
-        "@arcgis/core/layers/GeoJSONLayer.js",
-        "@arcgis/core/layers/GraphicsLayer.js",
-        "@arcgis/core/layers/RouteLayer.js",
-        "@arcgis/core/rest/support/Stop.js",
-        "@arcgis/core/rest/support/PolygonBarrier.js",
-        "@arcgis/core/rest/support/PolylineBarrier.js",
-        "@arcgis/core/widgets/Locate.js",
-        "@arcgis/core/Graphic.js",
-    ]);
+<script>
+    // Initialize map only in responder mode
+    if (responderModeFromURL) {
+        console.log('🗺️ Responder mode detected, initializing map...');
+        require([
+            "esri/config",
+            "esri/WebMap",
+            "esri/views/MapView",
+            "esri/layers/GraphicsLayer",
+            "esri/Graphic",
+            "esri/geometry/Point",
+            "esri/widgets/LayerList"
+        ], function(esriConfig, WebMap, MapView, GraphicsLayer, Graphic, Point, LayerList) {
+            try {
+                // Set API key
+                esriConfig.apiKey = "AAPTxy8BH1VEsoebNVZXo8HurJNkc1laRp1vAwT3-tXnuF3x-hGfL7b7jMe3CM0GiMyuTTg-lrFRdjvrAWsq9NCjJTcBWf_1bK0AoEE-eukjSiR7_41IaU8ZbnZytMHzhJvd87ZnvexVuj65yOBoclKr2N3ciauOPysAhdUze5Xm2KImfnxpA2Tnh9ANk5OTLlVMowDfQQ6RT5TIcg7um6QJUQi8VHORtLw0-sg5yUsCrVb1Hnp4zkT4zV-ZxpYG0_HAAT1_teoS1mtm";
+                
+                console.log('🗺️ Starting map initialization for responder...');
+            
+            // Make these available globally for the user update functions
+            window.Graphic = Graphic;
+            window.Point = Point;
 
-    //   const map = new Map({
-    //     basemap: "topo-vector",
-    //   });
+            const map = new WebMap({
+                portalItem: {
+                    id: "0d8708f95c71433daa14f4ad6965ff2d",
+                },
+            });
+            
+            console.log('🗺️ WebMap created, loading...');
 
-    const map = new WebMap({
-        portalItem: {
-            id: "0d8708f95c71433daa14f4ad6965ff2d",
-        },
-    });
+            const graphicsLayer = new GraphicsLayer();
+            map.add(graphicsLayer);
+            window.graphicsLayer = graphicsLayer; // Make available globally
+            let userGraphic = null;
+
+                // Create responder graphic that will be updated by the main tracking function
+            window.userGraphic = null; // Make available globally
 
 
-    const graphicsLayer = new GraphicsLayer();
-    map.add(graphicsLayer);
-    let userGraphic = null;
-
-    if ("geolocation" in navigator) {
-        navigator.geolocation.watchPosition(
-            function (position) {
-                const { latitude, longitude } = position.coords;
-
-                if (!userGraphic) {
-                    userGraphic = new Graphic({
-                        geometry: {
-                            type: "point",
-                            latitude,
-                            longitude
-                        },
-                        symbol: {
-                            type: "simple-marker",
-                            color: "blue",
-                            size: "12px",
-                            outline: {
-                                color: "white",
-                                width: 1
-                            }
-                        }
-                    });
-                    graphicsLayer.add(userGraphic);
-                } else {
-                    userGraphic.geometry = { type: "point", latitude, longitude };
+            console.log('🗺️ Creating MapView...');
+            
+            // Check if viewDiv exists
+            const viewDiv = document.getElementById('viewDiv');
+            if (!viewDiv) {
+                console.error('🗺️ viewDiv container not found!');
+                return;
+            }
+            console.log('🗺️ viewDiv container found:', viewDiv);
+            
+            const view = new MapView({
+                container: "viewDiv",
+                map: map,
+                extent: {
+                    xmin: -118.23849978435393,
+                    ymin: 34.13414868681906,
+                    xmax: -118.00438397317032,
+                    ymax: 34.25355759833813,
+                    spatialReference: 4326,
                 }
-            })
-    }
-
-
-    const view = new MapView({
-        container: "viewDiv",
-        map: map,
-
-        extent: {
-            xmin: -118.23849978435393,
-            ymin: 34.13414868681906,
-            xmax: -118.00438397317032,
-            ymax: 34.25355759833813,
-            spatialReference: 4326,
-        }
-    });
-
-    const layerList = new LayerList({
-        view: view
-    });
-
-    let isLayerListVisible = true;
-
-    const filterBtn = document.getElementById('filter-layers-btn');
-
-    filterBtn.addEventListener('click', function () {
-        if (isLayerListVisible)
-            view.ui.remove(layerList);
-
-        else
-            view.ui.add(layerList, {
-                position: "top-right"
+            });
+            
+            view.when(() => {
+                console.log('🗺️ MapView loaded successfully!');
+            }).catch((error) => {
+                console.error('🗺️ MapView failed to load:', error);
             });
 
-        isLayerListVisible = !isLayerListVisible
-    })
+            const layerList = new LayerList({
+                view: view
+            });
 
-    let currentLocation;
+            let isLayerListVisible = true;
 
-    if ("geolocation" in navigator) {
-        navigator.geolocation.getCurrentPosition(
-            function (position) {
-                const latitude = position.coords.latitude;
-                const longitude = position.coords.longitude;
+            const filterBtn = document.getElementById('filter-layers-btn');
 
-                console.log(latitude, longitude)
-                currentLocation = { x: longitude, y: latitude }
-            }
-        )
-    }
+            filterBtn.addEventListener('click', function () {
+                if (isLayerListVisible)
+                    view.ui.remove(layerList);
+                else
+                    view.ui.add(layerList, {
+                        position: "top-right"
+                    });
 
-    async function drawRoute(from, to) {
-        const stops = [
-            new Stop({
-                geometry: { x: from.x, y: from.y },
-                name: from.name,
-            }),
-            new Stop({
-                geometry: { x: to.x, y: to.y },
-                name: to.name,
-            }),
-        ];
-        const routeLayer = new RouteLayer({
-            stops,
-        });
+                isLayerListVisible = !isLayerListVisible;
+            });
 
-        map.add(routeLayer)
+            let currentLocation;
 
-        const results = await routeLayer.solve({ apiKey: "AAPTxy8BH1VEsoebNVZXo8HurJNkc1laRp1vAwT3-tXnuF3x-hGfL7b7jMe3CM0GiMyuTTg-lrFRdjvrAWsq9NCjJTcBWf_1bK0AoEE-eukjSiR7_41IaU8ZbnZytMHzhJvd87ZnvexVuj65yOBoclKr2N3ciauOPysAhdUze5Xm2KImfnxpA2Tnh9ANk5OTLlVMowDfQQ6RT5TIcg7um6QJUQi8VHORtLw0-sg5yUsCrVb1Hnp4zkT4zV-ZxpYG0_HAAT1_teoS1mtm" });
-        routeLayer.update(results);
-    }
+            if ("geolocation" in navigator) {
+                navigator.geolocation.getCurrentPosition(
+                    function (position) {
+                        const latitude = position.coords.latitude;
+                        const longitude = position.coords.longitude;
 
-    const goToButton = document.getElementById("route-to-button")
-
-    view.on("click", function (event) {
-        view.hitTest(event).then(function (response) {
-            const fireStaions = response.results.filter(r => r.graphic.layer && r.graphic.layer.title === "Fire Stations")
-            console.log(fireStaions)
-
-            if (fireStaions.length > 0) {
-                goToButton.style.display = "block"
-            } else {
-                goToButton.style.display = "none"
+                        console.log(latitude, longitude);
+                        currentLocation = { x: longitude, y: latitude };
+                    }
+                );
             }
 
-            // fireStaions.mapPoint.latitude
-
-            goToButton.addEventListener("click", () => {
-                drawRoute({ x: currentLocation.x, y: currentLocation.y, name: "My Location" }, { x: fireStaions[0].mapPoint.longitude, y: fireStaions[0].mapPoint.latitude, name: "Los Angeles County Fire Dept. Station 97" })
-
-                goToButton.style.display = "none"
-            })
-        })
-    })
+            // Note: Routing functionality requires additional imports (RouteLayer, Stop)
+            // For now, focusing on the basic map display with user locations
+            
+            console.log('🗺️ Responder map initialized successfully');
+            
+            } catch (error) {
+                console.error('🗺️ Error initializing responder map:', error);
+            }
+        }); // Close require function
+    } // Close responderModeFromURL check
 </script>
 
 </html>
