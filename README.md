@@ -1,9 +1,5 @@
-.env files:
-packages/server/.env
-contains 
-EMAIL_USER=__________
-EMAIL_PASS=__________
-Get email_pass from https://myaccount.google.com/apppasswords 
+.env files: packages/server/.env contains EMAIL_USER=__________ EMAIL_PASS=__________
+Get email_pass from https://myaccount.google.com/apppasswords for email functionality
 
 # Real-Time Location Tracking and Visualization Dashboard
 
