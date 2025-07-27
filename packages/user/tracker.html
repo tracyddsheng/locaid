@@ -564,7 +564,13 @@
         )
     }
 
+    let routeLayer;
+
     async function drawRoute(from, to) {
+        if (routeLayer) {
+            map.remove(routeLayer);
+        }
+
         const stops = [
             new Stop({
                 geometry: { x: from.x, y: from.y },
@@ -575,7 +581,7 @@
                 name: to.name,
             }),
         ];
-        const routeLayer = new RouteLayer({
+        routeLayer = new RouteLayer({
             stops,
         });
 
