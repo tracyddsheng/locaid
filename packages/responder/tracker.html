@@ -552,7 +552,10 @@
                 console.log(latitude, longitude)
                 currentLocation = { x: longitude, y: latitude }
 
-                console.log({currentLocation})
+                view.goTo({
+                center: [longitude, latitude],
+                zoom: 15
+                });
             }
         )
     }
