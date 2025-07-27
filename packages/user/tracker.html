@@ -149,8 +149,18 @@
             flex: 1;
         }
 
+        #layers-container {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            align-items: end;
+        }
+
         #filter-layers-btn {
             background-color: #42454A;
+        }
+        #layer-list {
+            display: none;
         }
 
         #route-to-button {
@@ -216,7 +226,10 @@
 
         <div class="button-group">
             <!-- <div id="status">Status: Idle</div> -->
-            <button id="filter-layers-btn" class="button">Filter Layers</button>
+             <div id="layers-container">
+                <button id="filter-layers-btn" class="button">Filter Layers</button>
+                <div id="layer-list"></div>
+             </div>
             <!-- <button id="startBtn" class="button">Share my location</button> -->
             <!-- <button id="responderBtn" class="button">Responder Mode</button>
             <button id="stopBtn" class="button hidden">Stop Tracking</button> -->
@@ -525,8 +538,11 @@
         }
     });
 
+    const layerListDiv= document.getElementById("layer-list");
+
     const layerList = new LayerList({
-        view: view
+        view: view,
+        container: layerListDiv,
     });
 
     let isLayerListVisible = false;
@@ -534,13 +550,11 @@
     const filterBtn = document.getElementById('filter-layers-btn');
 
     filterBtn.addEventListener('click', function () {
-        if (isLayerListVisible)
-            view.ui.remove(layerList);
-
-        else
-            view.ui.add(layerList, {
-                position: "top-right"
-            });
+        if (isLayerListVisible) {
+            layerListDiv.style.display = "none";
+        } else {
+            layerListDiv.style.display = "block";
+        }
 
         isLayerListVisible = !isLayerListVisible
     })
