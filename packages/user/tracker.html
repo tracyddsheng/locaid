@@ -159,6 +159,7 @@
         #filter-layers-btn {
             background-color: #42454A;
         }
+
         #layer-list {
             display: none;
         }
@@ -176,6 +177,7 @@
 
             padding: 10px;
         }
+
         #list-destination {
             max-height: 200px;
 
@@ -226,10 +228,10 @@
 
         <div class="button-group">
             <!-- <div id="status">Status: Idle</div> -->
-             <div id="layers-container">
+            <div id="layers-container">
                 <button id="filter-layers-btn" class="button">Filter Layers</button>
                 <div id="layer-list"></div>
-             </div>
+            </div>
             <!-- <button id="startBtn" class="button">Share my location</button> -->
             <!-- <button id="responderBtn" class="button">Responder Mode</button>
             <button id="stopBtn" class="button hidden">Stop Tracking</button> -->
@@ -538,7 +540,7 @@
         }
     });
 
-    const layerListDiv= document.getElementById("layer-list");
+    const layerListDiv = document.getElementById("layer-list");
 
     const layerList = new LayerList({
         view: view,
@@ -571,8 +573,8 @@
                 currentLocation = { x: longitude, y: latitude }
 
                 view.goTo({
-                center: [longitude, latitude],
-                zoom: 15
+                    center: [longitude, latitude],
+                    zoom: 15
                 });
             }
         )
@@ -611,7 +613,7 @@
 
     view.on("click", function (event) {
         view.hitTest(event).then(function (response) {
-            const fireStaions = response.results.filter(r => r.graphic.layer && r.graphic.layer.title === "Fire Stations")
+            const fireStaions = response.results.filter(r => r.graphic.layer && (r.graphic.layer.title === "Fire Stations" || r.graphic.layer.title === "Hospitals" || r.graphic.layer.title === "Hospitals"))
             console.log(fireStaions)
 
             if (fireStaions.length > 0) {
@@ -632,33 +634,57 @@
 
     const destination = document.querySelector("#list-destination");
 
-    document.querySelector(".search-input").addEventListener("keydown", async () => {
+    const searchInput = document.querySelector(".search-input");
+
+    searchInput.addEventListener("keydown", async () => {
         if (event.key === "Enter") {
-            const fireStationsLayer = view.map.allLayers.find(layer => layer.title === "Fire Stations");
+            const value = searchInput.value.toLowerCase();
+
+            let searchedLayer;
+
+            if (value.includes("fire")) {
+                searchedLayer = view.map.allLayers.find(layer => layer.title === "Fire Stations");
+                fillerUpSearchResult(searchedLayer, "CITY", "ADDRESS");
+            }
+            else if (value.includes("hospital")) {
+                searchedLayer = view.map.allLayers.find(layer => layer.title === "Hospitals");
+                fillerUpSearchResult(searchedLayer, "USER_HospN", "LongLabel");
+            }
+            else if (value.includes("nursing")) {
+                searchedLayer = view.map.allLayers.find(layer => layer.title === "Skilled Nursing Facilities");
+
+                fillerUpSearchResult(searchedLayer, "USER_Facility_Name", "LongLabel");
+            }
+            else
+                return;
+
+        }
+    });
+
+    async function fillerUpSearchResult(searchedLayer, property1, property2) {
+        destination.innerHTML = "";
 
         await projection.load();
 
-        if (fireStationsLayer && fireStationsLayer.type === "feature") {
-            
-            const query = fireStationsLayer.createQuery();
+        if (searchedLayer && searchedLayer.type === "feature") {
+            const query = searchedLayer.createQuery();
             query.where = "1=1"; // all features
             query.outFields = ["*"];
             query.returnGeometry = true;
 
-            fireStationsLayer.queryFeatures(query).then(result => {
+            searchedLayer.queryFeatures(query).then(result => {
                 const wgs84 = SpatialReference.WGS84;
 
                 const coords = result.features.map((f) => {
                     const pt = projection.project(f.geometry, wgs84);
+                    
                     return {
                         latitude: pt.latitude,
                         longitude: pt.longitude,
-                        address: f.attributes.ADDRESS,
-                        city: f.attributes.CITY,
+                        [property1]: f.attributes[property1],
+                        [property2]: f.attributes[property2],
                     };
                 });
-
-                console.log("Coordinates:", coords);
 
                 const myPoint = new Point({
                     latitude: currentLocation.y,
@@ -682,25 +708,25 @@
                 console.log("Sorted by distance:", sorted.slice(0, 10));
 
                 destination.style.display = "block";
-                sorted.slice(0, 10).forEach((item, index) => {
-  const div = document.createElement("div");
-  div.style.marginBottom = "8px";
-  div.innerHTML = `
-    <strong>${index + 1}. ${item.city}</strong><br>
-    ${item.address}<br>
-    Distance: ${(item.distance * 111).toFixed(2)} km
-  `;
-  div.addEventListener("click", () => {
-    drawRoute({ x: currentLocation.x, y: currentLocation.y, name: "My Location" }, { x: item.longitude, y: item.latitude, name: item.city })
-    destination.style.display = "none";
-  })
-  
-  destination.appendChild(div);
-});
 
+                sorted.slice(0, 10).forEach((item, index) => {
+                    const div = document.createElement("div");
+                    div.style.marginBottom = "8px";
+                    div.innerHTML = `
+                        <strong>${index + 1}. ${item[property1]}</strong><br>
+                        ${item[property2]}<br>
+                        Distance: ${(item.distance * 111).toFixed(2)} km
+                    `;
+                    div.addEventListener("click", () => {
+                        drawRoute({ x: currentLocation.x, y: currentLocation.y, name: "My Location" }, { x: item.longitude, y: item.latitude, name: item.city })
+                        destination.style.display = "none";
+                    })
+
+                    destination.appendChild(div);
+                });
             });
         }
-        }
-    });
+    }
 </script>
+
 </html>
